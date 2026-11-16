@@ -1,0 +1,1843 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2848c8">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Timetable">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>:root{color-scheme:light}html{-webkit-text-size-adjust:100%}body{margin:0}</style>
+<title>Ngurubani Timetable</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a phone-first workbench. Bottom tab bar, one card per task, weekly grids that scroll sideways only inside their own frame.
+   Junior = ultramarine, Primary = green; everything else is ink on cool paper. */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --surface2: #eaeef4;
+  --ink: #14213d;
+  --muted: #5a6579;
+  --line: #d9dfe8;
+  --junior: #2848c8;
+  --junior-soft: #dfe5fb;
+  --primary: #0b7d62;
+  --primary-soft: #d6efe7;
+  --ok: #0f7b4f;
+  --warn: #a8530a;
+  --bad: #c0262d;
+  --bad-soft: #fde4e4;
+  --on-accent: #ffffff;
+  --cs: 62%;
+  --cl: 91%;
+  --font-display: 'Bricolage Grotesque', 'Segoe UI', system-ui, sans-serif;
+  --font-body: 'Instrument Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1320; --surface: #151d2e; --surface2: #1d2740; --ink: #e8edf6; --muted: #98a4ba; --line: #2a3650;
+    --junior: #8ea2ff; --junior-soft: #222f63; --primary: #46d0a6; --primary-soft: #15463b;
+    --ok: #4cd08f; --warn: #f0a050; --bad: #ff7a80; --bad-soft: #4a1d24; --on-accent: #0d1320;
+    --cs: 34%; --cl: 24%; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1320; --surface: #151d2e; --surface2: #1d2740; --ink: #e8edf6; --muted: #98a4ba; --line: #2a3650;
+  --junior: #8ea2ff; --junior-soft: #222f63; --primary: #46d0a6; --primary-soft: #15463b;
+  --ok: #4cd08f; --warn: #f0a050; --bad: #ff7a80; --bad-soft: #4a1d24; --on-accent: #0d1320;
+  --cs: 34%; --cl: 24%; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 12px 96px;
+}
+.app { max-width: 920px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+h1, h2, h3 { font-family: var(--font-display); margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h1 { font-size: 30px; line-height: 1.08; font-weight: 700; }
+h2 { font-size: 18px; font-weight: 700; }
+h3 { font-size: 15px; font-weight: 600; }
+p { margin: 0; }
+button, select, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--junior); outline-offset: 2px; }
+.eyebrow { font-size: 12px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 99px; background: var(--surface2); color: var(--muted); white-space: nowrap; }
+.chip.j { background: var(--junior-soft); color: var(--junior); }
+.chip.p { background: var(--primary-soft); color: var(--primary); }
+.chip.b { background: var(--surface2); color: var(--ink); }
+.chip.bad { background: var(--bad-soft); color: var(--bad); }
+.chip.ok { background: var(--primary-soft); color: var(--ok); }
+.chip.warn { background: var(--surface2); color: var(--warn); }
+
+.hero { display: flex; flex-direction: column; gap: 10px; padding-block: 6px 2px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.card > header { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+
+.daybar { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.dbrow { display: grid; grid-template-columns: 62px 1fr; align-items: center; gap: 8px; }
+.dbrow > span { font-size: 12px; font-weight: 600; }
+.dbrow .j { color: var(--junior); } .dbrow .p { color: var(--primary); }
+.track { position: relative; height: 22px; background: var(--surface2); border-radius: 6px; }
+.blk { position: absolute; top: 3px; bottom: 3px; border-radius: 3px; }
+.blk.j { background: var(--junior); } .blk.p { background: var(--primary); }
+.axis { position: relative; height: 14px; margin-left: 70px; }
+.axis i { position: absolute; transform: translateX(-50%); font-style: normal; font-size: 10px; color: var(--muted); font-family: var(--font-mono); }
+
+.row { display: flex; align-items: center; gap: 10px; justify-content: space-between; flex-wrap: wrap; }
+.list { display: flex; flex-direction: column; }
+.li { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; padding: 9px 0; border-top: 1px solid var(--line); }
+.li:first-child { border-top: 0; padding-top: 0; }
+.li > div { min-width: 0; }
+
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 9px 14px; font-weight: 600; min-height: 40px; }
+.btn.primary { background: var(--junior); border-color: var(--junior); color: var(--on-accent); }
+.btn.big { width: 100%; padding: 14px; font-size: 16px; min-height: 52px; }
+.btn.danger { color: var(--bad); }
+.btn.ghost { background: transparent; }
+.btn[disabled] { opacity: 0.45; cursor: not-allowed; }
+.btn.sm { padding: 6px 10px; min-height: 34px; font-size: 13px; }
+.btnrow { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.stepper { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.stepper button { width: 38px; height: 38px; border: 0; background: var(--surface2); font-size: 18px; font-weight: 600; }
+.stepper output { min-width: 44px; text-align: center; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+.progress { height: 10px; background: var(--surface2); border-radius: 99px; overflow: hidden; }
+.progress i { display: block; height: 100%; width: 0; background: var(--junior); transition: width 0.12s linear; }
+
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+.sheet .metrics { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.sheet .metric { padding: 8px 10px; }
+.metric { background: var(--surface2); border-radius: 10px; padding: 10px 12px; min-width: 0; }
+.metric b { display: block; font-family: var(--font-display); font-size: 24px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.metric span { font-size: 12px; color: var(--muted); }
+
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.field label { font-size: 12px; font-weight: 600; color: var(--muted); }
+.inp { border: 1px solid var(--line); background: var(--surface); border-radius: 9px; padding: 8px 10px; min-height: 40px; width: 100%; min-width: 0; }
+select.inp { padding-right: 6px; }
+
+.seg { display: inline-flex; background: var(--surface2); border-radius: 10px; padding: 3px; gap: 2px; }
+.seg button { border: 0; background: transparent; padding: 7px 14px; border-radius: 8px; font-weight: 600; color: var(--muted); min-height: 36px; }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,0.12); }
+
+.pick { display: grid; grid-template-columns: 40px 1fr 40px; gap: 8px; align-items: end; }
+.pick .btn { padding: 0; min-height: 40px; }
+
+/* weekly grid */
+.ttwrap { overflow-x: auto; border-radius: 10px; }
+.tt { display: grid; grid-template-columns: 52px repeat(5, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.tt > div, .tt > button { background: var(--surface); min-width: 0; }
+.th { padding: 7px 4px; text-align: center; font-weight: 600; font-size: 13px; }
+.th small { display: block; font-size: 10.5px; color: var(--muted); font-weight: 500; font-family: var(--font-mono); }
+.rh { padding: 4px 4px; display: flex; flex-direction: column; justify-content: center; gap: 0; font-family: var(--font-mono); font-size: 10px; line-height: 1.25; color: var(--muted); font-variant-numeric: tabular-nums; }
+.rh b { font-family: var(--font-body); font-size: 12px; color: var(--ink); }
+.rh i { font-style: normal; }
+.rh i.j { color: var(--junior); } .rh i.p { color: var(--primary); }
+.brk { grid-column: 1 / -1; background: var(--surface2) !important; font-size: 11px; color: var(--muted); padding: 3px 8px; text-align: center; letter-spacing: 0.04em; }
+.cell { border: 0; border-radius: 0; padding: 5px 3px; min-height: 48px; display: flex; flex-direction: column; gap: 1px; text-align: left; line-height: 1.2; background: hsl(var(--h) var(--cs) var(--cl)) !important; position: relative; overflow: hidden; }
+.cell b { font-size: 12.5px; font-weight: 700; letter-spacing: 0.01em; }
+.cell span { font-size: 10.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cell.free { background: var(--surface) !important; color: var(--muted); align-items: center; justify-content: center; }
+.cell.empty { background: var(--surface) !important; }
+.cell.bad { box-shadow: inset 0 0 0 2px var(--bad); }
+.cell.bad::after { content: "!"; position: absolute; top: 2px; right: 4px; font-weight: 700; color: var(--bad); font-size: 12px; }
+.cell.sel { box-shadow: inset 0 0 0 3px var(--junior); }
+.cell.dbl { background: var(--bad-soft) !important; }
+
+.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--surface); border-top: 1px solid var(--line); padding-top: 6px;
+  padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px)); padding-left: max(8px, env(safe-area-inset-left, 0px)); padding-right: max(8px, env(safe-area-inset-right, 0px)); }
+.tabs nav { max-width: 920px; margin: 0 auto; display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+.tabs button { border: 0; background: transparent; padding: 8px 2px; border-radius: 10px; font-size: 12.5px; font-weight: 600; color: var(--muted); min-height: 44px; }
+.tabs button[aria-current="page"] { background: var(--junior-soft); color: var(--junior); }
+
+.tcard { display: flex; flex-direction: column; gap: 8px; padding: 12px 0; border-top: 1px solid var(--line); }
+.tcard:first-child { border-top: 0; padding-top: 0; }
+.tgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.days { display: flex; gap: 5px; flex-wrap: wrap; }
+.days button { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 5px 9px; font-size: 12.5px; font-weight: 600; min-height: 34px; color: var(--muted); }
+.days button[aria-pressed="true"] { background: var(--bad-soft); border-color: var(--bad); color: var(--bad); }
+.bar { height: 6px; background: var(--surface2); border-radius: 9px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--junior); }
+.bar i.full { background: var(--ok); } .bar i.over { background: var(--bad); }
+
+.lrow { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 12px 0; border-top: 1px solid var(--line); align-items: end; }
+.lrow:first-child { border-top: 0; padding-top: 0; }
+.lrow .field.wide { grid-column: 1 / -1; }
+
+.sched { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+.sched table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+.sched td { padding: 6px 0; border-top: 1px solid var(--line); }
+.sched td:last-child { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.sched tr.b td { color: var(--muted); font-size: 12.5px; }
+
+.banner { border-radius: 12px; padding: 10px 14px; font-size: 14px; display: flex; gap: 10px; justify-content: space-between; align-items: center; flex-wrap: wrap; }
+.banner.warn { background: var(--surface2); color: var(--warn); border: 1px solid var(--warn); }
+.banner.bad { background: var(--bad-soft); color: var(--bad); }
+.empty-state { text-align: center; padding: 28px 8px; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+
+.sheet { position: fixed; inset: 0; z-index: 40; background: rgba(8, 12, 22, 0.55); display: flex; align-items: flex-end; justify-content: center; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-bottom: env(safe-area-inset-bottom, 0px); }
+.sheet > div { background: var(--surface); border-radius: 16px 16px 0 0; padding: 16px; width: 100%; max-width: 640px; display: flex; flex-direction: column; gap: 10px; }
+.sheet textarea { width: 100%; height: 40vh; font-family: var(--font-mono); font-size: 12px; background: var(--surface2); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+.sheet > div { max-height: 90vh; overflow-y: auto; }
+.sheet textarea.ed { background: var(--surface); }
+.issues { display: flex; flex-direction: column; gap: 6px; }
+.issue { display: flex; gap: 8px; font-size: 13.5px; align-items: flex-start; }
+.issue .chip { flex: none; }
+.issue span:last-child { min-width: 0; overflow-wrap: anywhere; }
+label.btn { display: inline-flex; align-items: center; }
+
+.seg.days button { padding: 7px 10px; }
+.mtwrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.mt { border-collapse: separate; border-spacing: 0; font-size: 12px; width: max-content; min-width: 100%; }
+.mt th, .mt td { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 0; text-align: center; background: var(--surface); font-weight: 500; }
+.mt thead th { background: var(--surface2); font-weight: 600; padding: 5px 2px; }
+.mt th.cl { position: sticky; left: 0; z-index: 2; text-align: left; background: var(--surface); box-shadow: 1px 0 0 var(--line); min-width: 62px; }
+.mt thead th.cl { background: var(--surface2); z-index: 3; padding-left: 8px; }
+.mt tr.sec th { position: sticky; left: 0; text-align: left; background: var(--surface2); padding: 6px 8px; font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+.mt tr.sec.j th { color: var(--junior); } .mt tr.sec.p th { color: var(--primary); }
+.mt tr.tmr th { font-family: var(--font-mono); font-size: 10px; color: var(--muted); font-weight: 500; height: 20px; font-variant-numeric: tabular-nums; }
+.mt tr.tmr th.cl { padding-left: 8px; font-family: var(--font-body); }
+.mt td.c { min-width: 46px; height: 40px; padding: 2px; line-height: 1.15; background: hsl(var(--h) var(--cs) var(--cl)); }
+.mt td.c b { display: block; font-size: 11.5px; }
+.mt td.c span { display: block; font-size: 10.5px; color: var(--muted); }
+.mt td.free { background: var(--surface); color: var(--muted); }
+.mt td.na { background: var(--surface2); }
+.mt td.bad { box-shadow: inset 0 0 0 2px var(--bad); }
+.mt td.dim { opacity: 0.2; }
+.mt td.hit { box-shadow: inset 0 0 0 2px var(--ink); }
+.mt .bk { border-right: 2px solid var(--muted); }
+.mt .lk { border-right: 3px solid var(--ink); }
+.mt .cn { border: 0; background: none; font: inherit; font-weight: 700; padding: 6px 8px; width: 100%; text-align: left; min-height: 40px; color: var(--ink); }
+.mt thead th.dh { font-family: var(--font-display); font-size: 13px; border-right: 3px solid var(--ink); }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(76px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg); padding: 9px 14px; border-radius: 10px; font-size: 13.5px; z-index: 50; max-width: calc(100% - 32px); }
+details summary { cursor: pointer; font-weight: 600; min-height: 36px; display: flex; align-items: center; }
+@media (prefers-reduced-motion: reduce) { .progress i { transition: none; } }
+@media (min-width: 640px) { h1 { font-size: 38px; } .card { padding: 18px; } .tt { grid-template-columns: 92px repeat(5, minmax(90px, 1fr)); } .cell b { font-size: 14px; } .cell span { font-size: 12px; } .rh { font-size: 11px; } }
+</style>
+
+</head>
+<body>
+<div class="app" id="app"></div>
+<div class="tabs"><nav id="tabs" aria-label="Sections"></nav></div>
+<div id="overlay"></div>
+
+<script>
+/* ===== Ngurubani timetable engine (no DOM) ===== */
+var TT = (function () {
+  var DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+  var D = 5;
+
+  // Daily schedules in minutes from midnight.
+  var SCHEDULE = {
+    J: [
+      { t: 'L', s: 500, e: 540 }, { t: 'L', s: 540, e: 580 }, { t: 'B', s: 580, e: 595, label: 'Break' },
+      { t: 'L', s: 595, e: 635 }, { t: 'L', s: 635, e: 675 }, { t: 'B', s: 675, e: 690, label: 'Break' },
+      { t: 'L', s: 690, e: 730 }, { t: 'L', s: 730, e: 770 }, { t: 'B', s: 770, e: 840, label: 'Lunch' },
+      { t: 'L', s: 840, e: 880 }, { t: 'L', s: 880, e: 920 }
+    ],
+    P: [
+      { t: 'L', s: 500, e: 535 }, { t: 'L', s: 535, e: 570 }, { t: 'B', s: 570, e: 595, label: 'Break' },
+      { t: 'L', s: 595, e: 630 }, { t: 'L', s: 630, e: 665 }, { t: 'B', s: 665, e: 690, label: 'Break' },
+      { t: 'L', s: 690, e: 725 }, { t: 'L', s: 725, e: 760 }, { t: 'B', s: 760, e: 840, label: 'Lunch' },
+      { t: 'L', s: 840, e: 875 }
+    ]
+  };
+  function bellsOf(sec) { return SCHEDULE[sec].filter(function (x) { return x.t === 'L'; }); }
+  var BELLS = { J: bellsOf('J'), P: bellsOf('P') };
+
+  function fmt(m, suffix) {
+    var h = Math.floor(m / 60), mm = m % 60;
+    var h12 = h % 12 || 12;
+    return h12 + ':' + (mm < 10 ? '0' : '') + mm + (suffix ? (h >= 12 ? ' pm' : ' am') : '');
+  }
+
+  var CORE = ['English', 'Kiswahili', 'Mathematics', 'Integrated Science', 'Science & Technology'];
+
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      var t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  /* ---------- time clash rules ---------- */
+  function buildConflicts(buffer) {
+    var nJ = BELLS.J.length, nP = BELLS.P.length, NK = nJ + nP;
+    var times = BELLS.J.concat(BELLS.P);
+    var others = [];
+    for (var k = 0; k < NK; k++) {
+      others.push([]);
+      for (var k2 = 0; k2 < NK; k2++) {
+        if (k === k2) continue;
+        var sameSec = (k < nJ) === (k2 < nJ);
+        if (sameSec) continue; // different periods of one section never overlap
+        var a = times[k], b = times[k2];
+        if (a.s < b.e + buffer && b.s < a.e + buffer) others[k].push(k2);
+      }
+    }
+    return { nJ: nJ, nP: nP, NK: NK, others: others };
+  }
+
+  /* ---------- solver ---------- */
+  function Solver(data, seed) {
+    var self = this;
+    this.data = data;
+    this.rng = mulberry32(seed || 12345);
+    var buffer = data.buffer == null ? 5 : data.buffer;
+    var cf = buildConflicts(buffer);
+    var NK = cf.NK, nJ = cf.nJ;
+    this.cf = cf;
+    this.maxDay = data.maxPerDay || 7;
+    this.W = 20;
+
+    var tIndex = {};
+    data.teachers.forEach(function (t, i) { tIndex[t.id] = i; });
+    var T = data.teachers.length;
+    this.T = T;
+    this.off = new Uint8Array(T * D);
+    data.teachers.forEach(function (t, i) {
+      (t.off || []).forEach(function (d) { if (d >= 0 && d < D) self.off[i * D + d] = 1; });
+    });
+
+    var subjIdx = { '': 0 }, subjNames = [''];
+    function sid(n) { if (subjIdx[n] == null) { subjIdx[n] = subjNames.length; subjNames.push(n); } return subjIdx[n]; }
+    this.subjNames = subjNames;
+
+    this.lsub = []; this.lteach = [];
+    this.classes = data.classes;
+    this.C = data.classes.length;
+    this.np = []; this.secOff = []; this.grid = []; this.unplaced = [];
+    var byClass = {};
+    data.assignments.forEach(function (a) { (byClass[a.cls] = byClass[a.cls] || []).push(a); });
+
+    for (var c = 0; c < this.C; c++) {
+      var cl = data.classes[c];
+      var np = BELLS[cl.section].length;
+      this.np.push(np);
+      this.secOff.push(cl.section === 'J' ? 0 : nJ);
+      var slots = D * np;
+      var ids = [];
+      (byClass[cl.id] || []).forEach(function (a) {
+        var ti = a.teacher != null && tIndex[a.teacher] != null ? tIndex[a.teacher] : -1;
+        var s = sid(a.subject);
+        for (var i = 0; i < a.lessons; i++) {
+          var id = self.lsub.length;
+          self.lsub.push(s); self.lteach.push(ti);
+          ids.push(id);
+        }
+      });
+      // trim overflow, pad with free periods
+      while (ids.length > slots) {
+        var rid = ids.pop();
+        self.unplaced.push({ cls: cl.id, subject: subjNames[self.lsub[rid]] });
+      }
+      while (ids.length < slots) {
+        var fid = self.lsub.length;
+        self.lsub.push(0); self.lteach.push(-1);
+        ids.push(fid);
+      }
+      // shuffle
+      for (var i = ids.length - 1; i > 0; i--) {
+        var j = Math.floor(this.rng() * (i + 1)), tmp = ids[i]; ids[i] = ids[j]; ids[j] = tmp;
+      }
+      this.grid.push(Int32Array.from(ids));
+    }
+    this.NS = subjNames.length;
+    this.core = new Uint8Array(this.NS);
+    for (var s2 = 1; s2 < this.NS; s2++) if (CORE.indexOf(subjNames[s2]) >= 0) this.core[s2] = 1;
+    this.cnt = new Uint8Array(this.NS);
+
+    this.occ = new Uint8Array(T * D * NK);
+    for (c = 0; c < this.C; c++) {
+      for (var sl = 0; sl < this.grid[c].length; sl++) {
+        var t = this.lteach[this.grid[c][sl]];
+        if (t >= 0) {
+          var d = Math.floor(sl / this.np[c]), p = sl % this.np[c];
+          this.occ[(t * D + d) * NK + this.secOff[c] + p]++;
+        }
+      }
+    }
+    this.fh = new Int32Array(1);
+    this.cfC = new Int32Array(4000); this.cfS = new Int32Array(4000); this.cfN = 0;
+    this.tdT = new Int32Array(4); this.tdD = new Int32Array(4);
+    this.recompute();
+    this.configure({ total: 1200000, T0: 3, T1: 0.12, rounds: 4 });
+  }
+
+  Solver.prototype.configure = function (o) {
+    this.total = o.total; this.T0 = o.T0; this.T1 = o.T1; this.maxRounds = o.rounds;
+    this.it = 0; this.round = 0; this.done = false;
+  };
+
+  Solver.prototype.tdEval = function (t, d) {
+    var NK = this.cf.NK, occ = this.occ, others = this.cf.others;
+    var base = (t * D + d) * NK, hard = 0, load = 0;
+    for (var k = 0; k < NK; k++) {
+      var n = occ[base + k];
+      if (!n) continue;
+      load += n;
+      if (n > 1) hard += n * (n - 1) / 2;
+      var o = others[k];
+      for (var q = 0; q < o.length; q++) {
+        var k2 = o[q];
+        if (k2 > k) { var n2 = occ[base + k2]; if (n2) hard += n * n2; }
+      }
+    }
+    if (this.off[t * D + d]) hard += load;
+    this.eH += hard;
+    if (load > this.maxDay) this.eS += (load - this.maxDay) * 3;
+  };
+
+  Solver.prototype.cdEval = function (c, d) {
+    var np = this.np[c], g = this.grid[c], cnt = this.cnt, lsub = this.lsub, base = d * np, soft = 0;
+    for (var p = 0; p < np; p++) {
+      var s = lsub[g[base + p]];
+      if (!s) continue;
+      if (++cnt[s] > 1) soft += 4;
+      if (this.core[s] && p >= np - 2) soft += 1;
+    }
+    for (p = 0; p < np; p++) cnt[lsub[g[base + p]]] = 0;
+    this.eS += soft;
+  };
+
+  Solver.prototype.recompute = function () {
+    this.eH = 0; this.eS = 0;
+    for (var t = 0; t < this.T; t++) for (var d = 0; d < D; d++) this.tdEval(t, d);
+    for (var c = 0; c < this.C; c++) for (d = 0; d < D; d++) this.cdEval(c, d);
+    this.hard = this.eH; this.soft = this.eS;
+  };
+
+  Solver.prototype.applySwap = function (c, a, b) {
+    var g = this.grid[c], np = this.np[c], NK = this.cf.NK, off = this.secOff[c];
+    var ia = g[a], ib = g[b];
+    var ta = this.lteach[ia], tb = this.lteach[ib];
+    var da = Math.floor(a / np), pa = a % np, db = Math.floor(b / np), pb = b % np;
+    var ka = off + pa, kb = off + pb;
+    if (ta >= 0) { this.occ[(ta * D + da) * NK + ka]--; this.occ[(ta * D + db) * NK + kb]++; }
+    if (tb >= 0) { this.occ[(tb * D + db) * NK + kb]--; this.occ[(tb * D + da) * NK + ka]++; }
+    g[a] = ib; g[b] = ia;
+  };
+
+  Solver.prototype.rebuildConflicts = function () {
+    var n = 0, NK = this.cf.NK, others = this.cf.others;
+    for (var c = 0; c < this.C; c++) {
+      var g = this.grid[c], np = this.np[c], off = this.secOff[c];
+      for (var sl = 0; sl < g.length; sl++) {
+        var t = this.lteach[g[sl]];
+        if (t < 0) continue;
+        var d = Math.floor(sl / np), k = off + sl % np;
+        var base = (t * D + d) * NK, bad = this.off[t * D + d] || this.occ[base + k] > 1;
+        if (!bad) {
+          var o = others[k];
+          for (var q = 0; q < o.length; q++) if (this.occ[base + o[q]]) { bad = true; break; }
+        }
+        if (bad && n < 4000) { this.cfC[n] = c; this.cfS[n] = sl; n++; }
+      }
+    }
+    this.cfN = n;
+  };
+
+  Solver.prototype.step = function (iters, T) {
+    var rng = this.rng, W = this.W, C = this.C, np, g, tdT = this.tdT, tdD = this.tdD;
+    for (var it = 0; it < iters; it++) {
+      if ((it & 2047) === 0) this.rebuildConflicts();
+      var c, a, b;
+      if (this.cfN > 0 && rng() < 0.5) {
+        var r = Math.floor(rng() * this.cfN);
+        c = this.cfC[r]; a = this.cfS[r];
+      } else {
+        c = Math.floor(rng() * C);
+        a = Math.floor(rng() * D * this.np[c]);
+      }
+      np = this.np[c]; g = this.grid[c];
+      b = Math.floor(rng() * D * np);
+      if (a === b) continue;
+      var ia = g[a], ib = g[b];
+      if (this.lsub[ia] === this.lsub[ib] && this.lteach[ia] === this.lteach[ib]) continue;
+      var ta = this.lteach[ia], tb = this.lteach[ib];
+      var da = Math.floor(a / np), db = Math.floor(b / np);
+      // affected teacher-days (deduped)
+      var n = 0, i, j, dup;
+      var cand = [ta, da, ta, db, tb, da, tb, db];
+      for (i = 0; i < 4; i++) {
+        var tt = cand[i * 2], dd = cand[i * 2 + 1];
+        if (tt < 0) continue;
+        dup = false;
+        for (j = 0; j < n; j++) if (tdT[j] === tt && tdD[j] === dd) { dup = true; break; }
+        if (!dup) { tdT[n] = tt; tdD[n] = dd; n++; }
+      }
+      this.eH = 0; this.eS = 0;
+      for (i = 0; i < n; i++) this.tdEval(tdT[i], tdD[i]);
+      this.cdEval(c, da);
+      if (db !== da) this.cdEval(c, db);
+      var h0 = this.eH, s0 = this.eS;
+      this.applySwap(c, a, b);
+      this.eH = 0; this.eS = 0;
+      for (i = 0; i < n; i++) this.tdEval(tdT[i], tdD[i]);
+      this.cdEval(c, da);
+      if (db !== da) this.cdEval(c, db);
+      var dh = this.eH - h0, ds = this.eS - s0;
+      var delta = W * dh + ds;
+      if (delta <= 0 || rng() < Math.exp(-delta / T)) {
+        this.hard += dh; this.soft += ds;
+      } else {
+        this.applySwap(c, a, b);
+      }
+    }
+  };
+
+  // Advance the annealing schedule by n iterations.
+  Solver.prototype.runChunk = function (n) {
+    if (this.done) return;
+    var frac = Math.min(1, this.it / this.total);
+    var T = this.T0 * Math.pow(this.T1 / this.T0, frac);
+    this.step(n, T);
+    this.it += n;
+    if (this.it >= this.total) {
+      if (this.hard > 0 && this.round < this.maxRounds) {
+        this.round++; this.it = 0; this.T0 = Math.max(1.2, this.T0 * 0.7);
+      } else {
+        this.done = true;
+      }
+    }
+  };
+
+  Solver.prototype.progress = function () {
+    var r = this.round / (this.maxRounds + 1);
+    return Math.min(1, r + Math.min(1, this.it / this.total) / (this.maxRounds + 1));
+  };
+
+  // cells[classId] = array of D rows, each with np entries {s, t}
+  Solver.prototype.result = function () {
+    var out = {}, self = this;
+    for (var c = 0; c < this.C; c++) {
+      var rows = [], np = this.np[c];
+      for (var d = 0; d < D; d++) {
+        var row = [];
+        for (var p = 0; p < np; p++) {
+          var id = this.grid[c][d * np + p];
+          var ti = this.lteach[id];
+          row.push({ s: this.subjNames[this.lsub[id]], t: ti >= 0 ? this.data.teachers[ti].id : null });
+        }
+        rows.push(row);
+      }
+      out[this.classes[c].id] = rows;
+    }
+    return out;
+  };
+
+  /* ---------- independent checker (used after manual edits) ---------- */
+  // cells: { classId: [day][period] -> {s,t} }
+  function validate(data, cells) {
+    var buffer = data.buffer == null ? 5 : data.buffer;
+    var cf = buildConflicts(buffer);
+    var nJ = cf.nJ;
+    var teacherName = {}, off = {};
+    data.teachers.forEach(function (t) { teacherName[t.id] = t.name; off[t.id] = t.off || []; });
+    var slots = {};     // tid|day -> [{cls, key, p}]
+    var clsName = {};
+    data.classes.forEach(function (c) { clsName[c.id] = c; });
+    var clashes = [], offHits = [];
+    var bad = {};       // 'cls|d|p' -> true
+    Object.keys(cells).forEach(function (cid) {
+      var cl = clsName[cid]; if (!cl) return;
+      cells[cid].forEach(function (row, d) {
+        row.forEach(function (cell, p) {
+          if (!cell || !cell.t) return;
+          var key = (cl.section === 'J' ? 0 : nJ) + p;
+          var k = cell.t + '|' + d;
+          (slots[k] = slots[k] || []).push({ cls: cid, key: key, p: p, d: d, t: cell.t });
+        });
+      });
+    });
+    Object.keys(slots).forEach(function (k) {
+      var list = slots[k];
+      for (var i = 0; i < list.length; i++) {
+        var A = list[i];
+        if (off[A.t].indexOf(A.d) >= 0) { offHits.push({ t: A.t, d: A.d, cls: A.cls, p: A.p }); bad[A.cls + '|' + A.d + '|' + A.p] = true; }
+        for (var j = i + 1; j < list.length; j++) {
+          var B = list[j];
+          var same = A.key === B.key || cf.others[A.key].indexOf(B.key) >= 0;
+          if (same) {
+            clashes.push({ t: A.t, d: A.d, a: A, b: B });
+            bad[A.cls + '|' + A.d + '|' + A.p] = true;
+            bad[B.cls + '|' + B.d + '|' + B.p] = true;
+          }
+        }
+      }
+    });
+    return { clashes: clashes, offHits: offHits, bad: bad };
+  }
+
+  /* ---------- data helpers ---------- */
+  function teacherLevels(data) {
+    var cl = {}; data.classes.forEach(function (c) { cl[c.id] = c.section; });
+    var res = {};
+    data.teachers.forEach(function (t) { res[t.id] = { J: 0, P: 0 }; });
+    data.assignments.forEach(function (a) {
+      if (a.teacher && res[a.teacher] && cl[a.cls]) res[a.teacher][cl[a.cls]] += a.lessons;
+    });
+    return res;
+  }
+
+  function classTotals(data) {
+    var tot = {};
+    data.classes.forEach(function (c) { tot[c.id] = 0; });
+    data.assignments.forEach(function (a) { if (tot[a.cls] != null) tot[a.cls] += a.lessons; });
+    return tot;
+  }
+
+  function slotsFor(section) { return D * BELLS[section].length; }
+
+  /* ---------- sample data ---------- */
+  var SURNAMES = ['Mwangi', 'Otieno', 'Wanjiku', 'Kiprono', 'Achieng', 'Njoroge', 'Mutua', 'Wafula', 'Chebet', 'Kariuki',
+    'Odhiambo', 'Naliaka', 'Kamau', 'Atieno', 'Mbugua', 'Cheruiyot', 'Nyambura', 'Omondi', 'Wairimu', 'Barasa',
+    'Muthoni', 'Kibet', 'Akinyi', 'Maina', 'Wekesa', 'Jepkoech', 'Gitau', 'Ndungu', 'Adhiambo', 'Korir',
+    'Wambui', 'Simiyu', 'Chepkemoi', 'Mugo', 'Anyango', 'Karanja', 'Nafula', 'Kimani', 'Rotich', 'Awino',
+    'Macharia', 'Lagat', 'Auma', 'Waweru', 'Mumbi', 'Okello', 'Jerono', 'Githinji', 'Nekesa', 'Ouma',
+    'Wangari', 'Sang', 'Moraa', 'Kinyua', 'Cherono', 'Mwende', 'Onyango', 'Wesonga'];
+  var INITIALS = 'ABCDEFGHJKLMNPRSTW';
+
+  function sampleData() {
+    var classes = [];
+    var jStreams = ['Pink', 'Red', 'Green', 'Blue', 'Yellow'];
+    var pStreams = ['W', 'X', 'Z'];
+    [7, 8, 9].forEach(function (g) {
+      jStreams.forEach(function (st) {
+        classes.push({ id: 'G' + g + st, name: 'Grade ' + g + ' ' + st, short: g + ' ' + st.slice(0, 3), section: 'J', grade: g });
+      });
+    });
+    [[4, 3], [5, 3], [6, 3], [1, 2], [2, 2], [3, 2]].forEach(function (x) {
+      for (var i = 0; i < x[1]; i++) classes.push({ id: 'G' + x[0] + pStreams[i], name: 'Grade ' + x[0] + pStreams[i], short: x[0] + pStreams[i], section: 'P', grade: x[0] });
+    });
+
+    var JUN = [['English', 5, 'ENG'], ['Kiswahili', 4, 'KIS'], ['Mathematics', 5, 'MAT'], ['Integrated Science', 5, 'SCI'],
+      ['Social Studies', 4, 'SST'], ['Religious Education', 3, 'REL'], ['Pre-Technical Studies', 4, 'PTS'],
+      ['Agriculture & Nutrition', 4, 'AGN'], ['Creative Arts & Sports', 5, 'CAS'], ['Pastoral Instruction', 1, 'PPI']];
+    var UPR = [['English', 5], ['Kiswahili', 4], ['Mathematics', 5], ['Science & Technology', 4], ['Social Studies', 3],
+      ['Agriculture & Nutrition', 3], ['Religious Education', 3], ['Creative Arts & Sports', 4],
+      ['Physical & Health Education', 3], ['Pastoral Instruction', 1]];
+    var LWR = [['English', 5], ['Kiswahili', 5], ['Mathematics', 5], ['Environmental Activities', 5],
+      ['Religious Education', 3], ['Creative Arts & Sports', 5], ['Physical & Health Education', 3],
+      ['Indigenous Language', 2], ['Hygiene & Nutrition', 2]];
+
+    // pools: which teachers cover which subjects
+    var specialist = { 'Religious Education': 'REL', 'Agriculture & Nutrition': 'AGN', 'Creative Arts & Sports': 'ARTS', 'Physical & Health Education': 'ARTS' };
+    var poolDefs = {
+      ENG: { label: 'English', spec: [['J', 5]] },
+      KIS: { label: 'Kiswahili', spec: [['J', 4]] },
+      MAT: { label: 'Mathematics', spec: [['J', 4]] },
+      SCI: { label: 'Integrated Science', spec: [['J', 4]] },
+      SST: { label: 'Social Studies', spec: [['J', 4]] },
+      PTS: { label: 'Pre-Technical Studies', spec: [['J', 4]] },
+      REL: { label: 'Religious Education', spec: [['J', 2], ['P', 1], ['B', 2]] },
+      AGN: { label: 'Agriculture & Nutrition', spec: [['J', 3], ['P', 1], ['B', 1]] },
+      ARTS: { label: 'Creative Arts & Sports', spec: [['J', 2], ['P', 2], ['B', 5]] }
+    };
+    var juniorPool = { 'English': 'ENG', 'Kiswahili': 'KIS', 'Mathematics': 'MAT', 'Integrated Science': 'SCI', 'Social Studies': 'SST',
+      'Pre-Technical Studies': 'PTS', 'Religious Education': 'REL', 'Agriculture & Nutrition': 'AGN', 'Creative Arts & Sports': 'ARTS',
+      'Pastoral Instruction': 'ENG' };
+
+    var teachers = [], codes = [];
+    for (var cd = 1; cd <= 60; cd++) if (cd !== 13) codes.push(cd);
+    function newTeacher(area, level) {
+      var code = codes[teachers.length] || (60 + teachers.length);
+      var t = { id: 'T' + code, name: 'T' + code, area: area, level: level, max: 30, off: [] };
+      teachers.push(t); return t;
+    }
+    var pools = {};
+    Object.keys(poolDefs).forEach(function (k) {
+      pools[k] = [];
+      poolDefs[k].spec.forEach(function (sp) {
+        for (var i = 0; i < sp[1]; i++) pools[k].push(newTeacher(poolDefs[k].label, sp[0]));
+      });
+    });
+    var load = {};
+    function pick(poolKey, sec) {
+      var best = null;
+      pools[poolKey].forEach(function (t) {
+        if (t.level !== 'B' && t.level !== sec) return;
+        if (best === null || (load[t.id] || 0) < (load[best.id] || 0)) best = t;
+      });
+      return best;
+    }
+    var assignments = [];
+    function add(cl, subject, lessons, teacher) {
+      load[teacher.id] = (load[teacher.id] || 0) + lessons;
+      assignments.push({ cls: cl.id, subject: subject, teacher: teacher.id, lessons: lessons });
+    }
+    // junior
+    classes.filter(function (c) { return c.section === 'J'; }).forEach(function (cl) {
+      JUN.forEach(function (s) {
+        add(cl, s[0], s[1], pick(juniorPool[s[0]], 'J'));
+      });
+    });
+    // primary: class teachers + specialists
+    classes.filter(function (c) { return c.section === 'P'; }).forEach(function (cl) {
+      var ct = newTeacher('Class teacher, ' + cl.name, 'P');
+      var list = cl.grade >= 4 ? UPR : LWR;
+      list.forEach(function (s) {
+        var pk = specialist[s[0]];
+        add(cl, s[0], s[1], pk ? pick(pk, 'P') : ct);
+      });
+    });
+    return { school: 'Ngurubani Junior School', classes: classes, teachers: teachers, assignments: assignments, buffer: 5, maxPerDay: 7 };
+  }
+
+  return {
+    DAYS: DAYS, D: D, SCHEDULE: SCHEDULE, BELLS: BELLS, fmt: fmt, Solver: Solver, validate: validate,
+    teacherLevels: teacherLevels, classTotals: classTotals, slotsFor: slotsFor, sampleData: sampleData, CORE: CORE
+  };
+})();
+if (typeof module !== 'undefined') module.exports = TT;
+
+</script>
+<script>
+/* ===== Lesson importer (no DOM): reads a CSV / pasted Excel sheet ===== */
+var Importer = (function () {
+  var DAYN = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+  var DAYK = ['mon', 'tue', 'wed', 'thu', 'fri'];
+
+  function nk(s) { return String(s == null ? '' : s).toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]/g, ''); }
+  function ckey(s) { return nk(String(s == null ? '' : s).replace(/grade|class|std|form/ig, '')); }
+  function cap(s) { s = String(s).toLowerCase(); return s.charAt(0).toUpperCase() + s.slice(1); }
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+
+  /* ---------- reading the text ---------- */
+  function detectDelim(text) {
+    var line = '';
+    var lines = text.split(/\r?\n/);
+    for (var i = 0; i < lines.length; i++) if (lines[i].trim()) { line = lines[i]; break; }
+    var best = ',', n = -1;
+    ['\t', ';', ','].forEach(function (d) {
+      var c = line.split(d).length - 1;
+      if (c > n) { n = c; best = d; }
+    });
+    return best;
+  }
+
+  function parse(text, delim) {
+    var rows = [], row = [], cell = '', q = false, i, c;
+    text = String(text).replace(/^﻿/, '');
+    for (i = 0; i < text.length; i++) {
+      c = text.charAt(i);
+      if (q) {
+        if (c === '"') { if (text.charAt(i + 1) === '"') { cell += '"'; i++; } else q = false; }
+        else cell += c;
+      } else if (c === '"' && cell === '') q = true;
+      else if (c === delim) { row.push(cell); cell = ''; }
+      else if (c === '\n' || c === '\r') {
+        if (c === '\r' && text.charAt(i + 1) === '\n') i++;
+        row.push(cell); cell = ''; rows.push(row); row = [];
+      } else cell += c;
+    }
+    if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+    return rows.filter(function (r) { return r.some(function (x) { return String(x).trim() !== ''; }); });
+  }
+
+  var HEAD = {
+    teacher: ['teacher', 'teachercode', 'code', 'tcode', 'teachercodeno', 'teachercodenumber', 'tchr'],
+    name: ['name', 'teachername', 'fullname', 'teachersname'],
+    subject: ['subject', 'learningarea', 'learningareas', 'subjectname'],
+    cls: ['class', 'classname', 'stream', 'grade', 'classstream', 'form'],
+    lessons: ['lessons', 'lessonsperweek', 'lessonsaweek', 'lessonsweek', 'periods', 'periodsperweek', 'perweek', 'weekly', 'number', 'no', 'count', 'lpw'],
+    off: ['daysoff', 'dayoff', 'off', 'notavailable', 'unavailable']
+  };
+
+  /* ---------- subjects ---------- */
+  var CANON = ['English', 'Kiswahili', 'Mathematics', 'Integrated Science', 'Science & Technology', 'Social Studies',
+    'Religious Education', 'Pre-Technical Studies', 'Agriculture & Nutrition', 'Creative Arts & Sports', 'Pastoral Instruction',
+    'Physical & Health Education', 'Environmental Activities', 'Indigenous Language', 'Hygiene & Nutrition'];
+  var SUBJ = {};
+  CANON.forEach(function (c) { SUBJ[nk(c)] = c; });
+  var ALIASES = {
+    eng: 'English', kis: 'Kiswahili', kisw: 'Kiswahili', swahili: 'Kiswahili',
+    mat: 'Mathematics', math: 'Mathematics', maths: 'Mathematics',
+    sci: '*', science: '*', intscience: 'Integrated Science', intsci: 'Integrated Science',
+    st: 'Science & Technology', scitech: 'Science & Technology', sandt: 'Science & Technology', scienceandtech: 'Science & Technology',
+    sst: 'Social Studies', social: 'Social Studies', socialstudies: 'Social Studies',
+    re: 'Religious Education', cre: 'Religious Education', ire: 'Religious Education', hre: 'Religious Education', rel: 'Religious Education', religion: 'Religious Education',
+    pts: 'Pre-Technical Studies', pretech: 'Pre-Technical Studies', pretechnical: 'Pre-Technical Studies',
+    agn: 'Agriculture & Nutrition', agri: 'Agriculture & Nutrition', agric: 'Agriculture & Nutrition', agriculture: 'Agriculture & Nutrition', agriculturenutrition: 'Agriculture & Nutrition',
+    cas: 'Creative Arts & Sports', arts: 'Creative Arts & Sports', creativearts: 'Creative Arts & Sports', creativeartssports: 'Creative Arts & Sports',
+    ppi: 'Pastoral Instruction', pastoral: 'Pastoral Instruction',
+    phe: 'Physical & Health Education', pe: 'Physical & Health Education', physicaleducation: 'Physical & Health Education',
+    env: 'Environmental Activities', environmental: 'Environmental Activities',
+    il: 'Indigenous Language', hn: 'Hygiene & Nutrition', hygiene: 'Hygiene & Nutrition'
+  };
+  function canonSubject(raw, section) {
+    var k = nk(raw), hit = SUBJ[k] || ALIASES[k];
+    if (hit === '*') return section === 'J' ? 'Integrated Science' : 'Science & Technology';
+    return hit || String(raw).trim().replace(/\s+/g, ' ');
+  }
+
+  /* ---------- teachers, classes, days ---------- */
+  function parseTeacher(raw) {
+    raw = String(raw || '').trim();
+    var m = raw.match(/^t?\s*0*(\d{1,3})(?:\s*[-–:.]\s*|\s+)?(.*)$/i);
+    if (m) return { num: parseInt(m[1], 10), name: (m[2] || '').trim() };
+    return { num: null, name: raw };
+  }
+  function parseOff(s) {
+    var out = [];
+    String(s || '').toLowerCase().split(/[^a-z]+/).forEach(function (w) {
+      var i = DAYK.indexOf(w.slice(0, 3));
+      if (w.length >= 3 && i >= 0 && out.indexOf(i) < 0) out.push(i);
+    });
+    return out.sort();
+  }
+  function makeClass(raw, key) {
+    var m = key.match(/^(\d{1,2})([a-z0-9]+)$/);
+    if (!m) return null;
+    var g = parseInt(m[1], 10);
+    if (g < 1 || g > 9) return null;
+    var stream = String(raw).replace(/grade|class|std|form/ig, '').trim().replace(/^\d+\s*/, '').replace(/\s+/g, '');
+    if (!stream) return null;
+    var short = stream.length <= 2;
+    var sv = short ? stream.toUpperCase() : cap(stream);
+    return {
+      id: 'G' + g + sv, name: 'Grade ' + g + (short ? '' : ' ') + sv, short: g + (short ? '' : ' ') + (short ? sv : sv.slice(0, 3)),
+      section: g >= 7 ? 'J' : 'P', grade: g
+    };
+  }
+
+  /* ---------- main reader ---------- */
+  function read(text, data) {
+    var res = { errors: [], warnings: [], assignments: [], teachers: [], newClasses: [], rows: 0, hasOff: false, delim: ',', unassigned: 0 };
+    text = String(text == null ? '' : text);
+    if (!text.trim()) { res.errors.push({ row: 0, msg: 'The sheet is empty.' }); return res; }
+    var delim = detectDelim(text.replace(/^﻿/, ''));
+    res.delim = delim;
+    var rows = parse(text, delim);
+    if (!rows.length) { res.errors.push({ row: 0, msg: 'The sheet is empty.' }); return res; }
+
+    var map = {}, start = 0, hdr = rows[0].map(nk);
+    hdr.forEach(function (h, i) {
+      Object.keys(HEAD).forEach(function (f) { if (map[f] == null && HEAD[f].indexOf(h) >= 0) map[f] = i; });
+    });
+    if (map.subject != null && map.cls != null && map.lessons != null) start = 1;
+    else if (rows[0].length >= 4 && /^\d+$/.test(String(rows[0][3]).trim())) { map = { teacher: 0, subject: 1, cls: 2, lessons: 3 }; }
+    else {
+      res.errors.push({ row: 1, msg: 'Could not find the columns. The first row should name them: Teacher, Subject, Class, Lessons.' });
+      return res;
+    }
+
+    var classMap = {};
+    (data.classes || []).forEach(function (c) {
+      [ckey(c.name), ckey(c.short || ''), nk(String(c.id).replace(/^G/i, ''))].forEach(function (k) { if (k && !classMap[k]) classMap[k] = c; });
+    });
+    var existingByName = {};
+    (data.teachers || []).forEach(function (t) { existingByName[nk(t.name)] = t; });
+
+    var tMap = {}, tOrder = [], asg = {}, aOrder = [], warned = {}, newMap = {};
+    function err(rn, msg) { res.errors.push({ row: rn, msg: msg }); }
+    function warnOnce(k, msg) { if (!warned[k]) { warned[k] = 1; res.warnings.push({ row: 0, msg: msg }); } }
+    function get(row, f) { return map[f] == null ? '' : String(row[map[f]] == null ? '' : row[map[f]]).trim(); }
+
+    for (var r = start; r < rows.length; r++) {
+      var row = rows[r], rn = r + 1;
+      res.rows++;
+      var subjRaw = get(row, 'subject'), clsRaw = get(row, 'cls'), lesRaw = get(row, 'lessons'), tRaw = get(row, 'teacher');
+      if (!subjRaw) { err(rn, 'No subject.'); continue; }
+      if (!clsRaw) { err(rn, 'No class.'); continue; }
+      var les = /^\d+(\.0+)?$/.test(lesRaw) ? parseInt(lesRaw, 10) : NaN;
+      if (!(les >= 1 && les <= 40)) { err(rn, 'Lessons "' + lesRaw + '" is not a number from 1 to 40.'); continue; }
+      var key = ckey(clsRaw), cls = classMap[key] || newMap[key];
+      if (!cls) {
+        cls = makeClass(clsRaw, key);
+        if (!cls) { err(rn, 'Class "' + clsRaw + '" is not recognised. Use names like 7 Pink or 4W.'); continue; }
+        newMap[key] = cls; res.newClasses.push(cls);
+      }
+      var subject = canonSubject(subjRaw, cls.section);
+      var tid = null;
+      if (tRaw) {
+        var pt = parseTeacher(tRaw);
+        if (pt.num != null) {
+          tid = 'T' + pt.num;
+          if (pt.num < 1 || pt.num === 13 || pt.num > 60) warnOnce('code' + pt.num, 'Teacher code ' + pt.num + ' is not one of your codes (1 to 60, without 13). It was kept.');
+        } else {
+          var ex = existingByName[nk(pt.name)];
+          tid = ex ? ex.id : 'N' + nk(pt.name);
+        }
+        var ft = tMap[tid];
+        if (!ft) { ft = tMap[tid] = { id: tid, name: '', off: null }; tOrder.push(tid); }
+        var nm = get(row, 'name') || pt.name;
+        if (!ft.name && nm) ft.name = nm;
+        if (map.off != null) {
+          res.hasOff = true; ft.off = ft.off || [];
+          parseOff(get(row, 'off')).forEach(function (d) { if (ft.off.indexOf(d) < 0) ft.off.push(d); });
+        }
+      } else res.unassigned += les;
+      var ak = cls.id + '|' + subject + '|' + (tid || '');
+      if (asg[ak]) { asg[ak].lessons += les; warnOnce('dup', 'Some rows repeat the same teacher, subject and class. Their lessons were added together.'); }
+      else { asg[ak] = { cls: cls.id, subject: subject, teacher: tid, lessons: les }; aOrder.push(ak); }
+    }
+    if (res.unassigned) res.warnings.push({ row: 0, msg: res.unassigned + ' lessons have no teacher. They are placed but cannot be checked for clashes.' });
+    res.assignments = aOrder.map(function (k) { return asg[k]; });
+    res.teachers = tOrder.map(function (id) { return tMap[id]; });
+    if (!res.assignments.length && !res.errors.length) res.errors.push({ row: 0, msg: 'No lessons found in the sheet.' });
+    return res;
+  }
+
+  /* ---------- applying ---------- */
+  function areaOf(list, classNames) {
+    var bySubj = {}, classes = {};
+    list.forEach(function (a) { bySubj[a.subject] = (bySubj[a.subject] || 0) + a.lessons; classes[a.cls] = 1; });
+    var subs = Object.keys(bySubj).sort(function (a, b) { return bySubj[b] - bySubj[a]; });
+    var cl = Object.keys(classes);
+    if (subs.length >= 4) return cl.length === 1 ? 'Class teacher, ' + (classNames[cl[0]] || cl[0]) : 'Class teacher';
+    return subs.slice(0, 2).join(', ');
+  }
+  function sortKey(t) { var m = /^T(\d+)$/.exec(t.id); return m ? [0, parseInt(m[1], 10), ''] : [1, 0, t.name.toLowerCase()]; }
+  function sortTeachers(a, b) {
+    var x = sortKey(a), y = sortKey(b);
+    return x[0] - y[0] || x[1] - y[1] || (x[2] < y[2] ? -1 : x[2] > y[2] ? 1 : 0);
+  }
+
+  function apply(data, p, mode) {
+    var d = clone(data), i;
+    p.newClasses.forEach(function (c) { if (!d.classes.some(function (x) { return x.id === c.id; })) d.classes.push(clone(c)); });
+    var classNames = {}; d.classes.forEach(function (c) { classNames[c.id] = c.name; });
+    var old = {}; d.teachers.forEach(function (t) { old[t.id] = t; });
+    var inFile = {}; p.assignments.forEach(function (a) { inFile[a.cls] = 1; });
+    var byT = {}; p.assignments.forEach(function (a) { if (a.teacher) (byT[a.teacher] = byT[a.teacher] || []).push(a); });
+
+    var pool = {};
+    if (mode === 'merge') d.teachers.forEach(function (t) { pool[t.id] = t; });
+    p.teachers.forEach(function (ft) {
+      var ex = old[ft.id];
+      pool[ft.id] = {
+        id: ft.id,
+        name: ft.name || (ex && ex.name) || ft.id,
+        area: areaOf(byT[ft.id] || [], classNames) || (ex && ex.area) || '',
+        max: ex && ex.max ? ex.max : 30,
+        off: p.hasOff ? (ft.off || []) : (ex ? ex.off || [] : [])
+      };
+    });
+    d.teachers = Object.keys(pool).map(function (k) { return pool[k]; }).sort(sortTeachers);
+    if (mode === 'merge') d.assignments = d.assignments.filter(function (a) { return !inFile[a.cls]; }).concat(clone(p.assignments));
+    else d.assignments = clone(p.assignments);
+    return d;
+  }
+
+  function summarize(d, TT) {
+    var tot = TT.classTotals(d), lv = TT.teacherLevels(d), over = [], under = [], full = 0, lessons = 0;
+    d.classes.forEach(function (c) {
+      var s = TT.slotsFor(c.section), n = tot[c.id] || 0;
+      lessons += n;
+      if (n > s) over.push({ name: c.name, n: n - s });
+      else if (n < s) under.push({ name: c.name, n: s - n, none: n === 0 });
+      else full++;
+    });
+    var cnt = { J: 0, P: 0, B: 0, none: 0 }, heavy = [], impossible = [];
+    d.teachers.forEach(function (t) {
+      var l = lv[t.id] || { J: 0, P: 0 }, k = l.J && l.P ? 'B' : l.J ? 'J' : l.P ? 'P' : 'none', n = l.J + l.P;
+      cnt[k]++;
+      var room = l.J ? TT.slotsFor('J') : TT.slotsFor('P');
+      if (n > room) impossible.push({ name: t.name, n: n, room: room });
+      else if (n > (t.max || 30)) heavy.push({ name: t.name, n: n });
+    });
+    return { over: over, under: under, full: full, lessons: lessons, levels: cnt, heavy: heavy, impossible: impossible, classes: d.classes.length, teachers: d.teachers.length };
+  }
+
+  /* ---------- writing sheets ---------- */
+  function cell(c) { c = String(c == null ? '' : c); return /[",\n\r;\t]/.test(c) ? '"' + c.replace(/"/g, '""') + '"' : c; }
+  function sheet(rows) { return '﻿' + rows.map(function (r) { return r.map(cell).join(','); }).join('\r\n'); }
+
+  function toCsv(d) {
+    var tm = {}, cm = {};
+    d.teachers.forEach(function (t) { tm[t.id] = t; });
+    d.classes.forEach(function (c) { cm[c.id] = c; });
+    var rows = [['Teacher', 'Name', 'Subject', 'Class', 'Lessons', 'Days off']];
+    d.assignments.forEach(function (a) {
+      var t = a.teacher && tm[a.teacher], code = '', name = '', off = '';
+      if (t) {
+        var m = /^T(\d+)$/.exec(t.id);
+        if (m) { code = m[1]; name = t.name === t.id ? '' : t.name; } else code = t.name;
+        off = (t.off || []).map(function (i) { return DAYN[i]; }).join(' ');
+      }
+      rows.push([code, name, a.subject, cm[a.cls] ? cm[a.cls].name : a.cls, a.lessons, off]);
+    });
+    return sheet(rows);
+  }
+
+  function template() {
+    return sheet([
+      ['Teacher', 'Name', 'Subject', 'Class', 'Lessons', 'Days off'],
+      [5, '', 'English', '7 Pink', 5, ''],
+      [5, '', 'English', '7 Red', 5, ''],
+      [5, '', 'English', '7 Green', 5, ''],
+      [17, 'Wafula', 'Mathematics', '8 Blue', 5, 'Fri'],
+      [17, 'Wafula', 'Mathematics', '8 Yellow', 5, 'Fri'],
+      [22, '', 'English', '4W', 5, ''],
+      [22, '', 'Mathematics', '4W', 5, ''],
+      [22, '', 'Kiswahili', '4W', 4, ''],
+      [30, '', 'Creative Arts & Sports', '4W', 4, ''],
+      [30, '', 'Creative Arts & Sports', '9 Pink', 5, '']
+    ]);
+  }
+
+  return { read: read, apply: apply, summarize: summarize, toCsv: toCsv, template: template, parseTeacher: parseTeacher, parseOff: parseOff };
+})();
+if (typeof module !== 'undefined') module.exports = Importer;
+
+</script>
+<script>
+(function () {
+  'use strict';
+  var STORE = 'ngurubani-timetable-v2';
+  var ABBR = { 'English': 'ENG', 'Kiswahili': 'KIS', 'Mathematics': 'MAT', 'Integrated Science': 'SCI', 'Science & Technology': 'S&T',
+    'Social Studies': 'SST', 'Religious Education': 'RE', 'Pre-Technical Studies': 'PTS', 'Agriculture & Nutrition': 'AGN',
+    'Creative Arts & Sports': 'ARTS', 'Pastoral Instruction': 'PPI', 'Physical & Health Education': 'PHE',
+    'Environmental Activities': 'ENV', 'Indigenous Language': 'IL', 'Hygiene & Nutrition': 'H&N' };
+  var ABBR_KEYS = Object.keys(ABBR);
+
+  var S = { data: null, cells: null, stale: false, sample: true, view: 'gen', vmode: 'class', selClass: null, selTeacher: null,
+    lClass: null, edit: false, pick: null, undo: null, fLevel: 'all', fQ: '', gen: { running: false, p: 0, result: null }, sheet: null, imp: null, pasteText: '', toast: '', mDay: '0', hl: '' };
+  (function () { var wd = new Date().getDay(); S.mDay = wd >= 1 && wd <= 5 ? String(wd - 1) : '0'; })();
+  var DL = null;
+  DL = { save: function (o) {
+    return new Promise(function (res, rej) {
+      try {
+        var blob = new Blob([o.data], { type: /\.json$/.test(o.filename) ? 'application/json' : /\.html$/.test(o.filename) ? 'text/html;charset=utf-8' : 'text/csv;charset=utf-8' });
+        var u = URL.createObjectURL(blob), a = document.createElement('a');
+        a.href = u; a.download = o.filename; document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function () { URL.revokeObjectURL(u); }, 4000); res({ status: 'saved' });
+      } catch (e) { rej({ code: 'unavailable' }); }
+    });
+  } };
+  var toastTimer = null;
+
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function $(s) { return document.querySelector(s); }
+  function uid() { return 'T' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36); }
+
+  /* ---------- storage ---------- */
+  function load() {
+    try {
+      var raw = localStorage.getItem(STORE);
+      if (raw) {
+        var o = JSON.parse(raw);
+        if (o && o.data && o.data.classes) { S.data = o.data; S.cells = o.cells || null; S.stale = !!o.stale; S.sample = !!o.sample; return; }
+      }
+    } catch (e) { }
+    S.data = TT.sampleData(); S.cells = null; S.sample = true; S.stale = false;
+  }
+  function save() {
+    try { localStorage.setItem(STORE, JSON.stringify({ data: S.data, cells: S.cells, stale: S.stale, sample: S.sample })); } catch (e) { }
+  }
+  function touch(staleIt) { S.sample = false; if (staleIt && S.cells) S.stale = true; save(); }
+
+  /* ---------- helpers ---------- */
+  function abbr(s) {
+    if (!s) return '';
+    if (ABBR[s]) return ABBR[s];
+    var w = s.replace(/[^A-Za-z ]/g, '').split(' ').filter(Boolean).map(function (x) { return x[0]; }).join('').toUpperCase().slice(0, 4);
+    return w || s.slice(0, 3).toUpperCase();
+  }
+  function hue(s) {
+    var i = ABBR_KEYS.indexOf(s);
+    if (i >= 0) return Math.round((i * 137.5 + 205) % 360);
+    var h = 0; for (var k = 0; k < s.length; k++) h = (h * 31 + s.charCodeAt(k)) % 360; return h;
+  }
+  function tById() { var m = {}; S.data.teachers.forEach(function (t) { m[t.id] = t; }); return m; }
+  function cById() { var m = {}; S.data.classes.forEach(function (c) { m[c.id] = c; }); return m; }
+  function shortName(t) { return t ? t.name.split(' ')[0] : ''; }
+  function makeShort(name) {
+    var n = name.replace(/^Grade\s+/i, '').trim(), m = n.match(/^(\d+)\s+(\S+)/);
+    return m ? m[1] + ' ' + m[2].slice(0, 3) : n;
+  }
+  function shortClass(c) { return c.short || makeShort(c.name); }
+  function levelOf(lv) { if (lv.J && lv.P) return 'B'; if (lv.J) return 'J'; if (lv.P) return 'P'; return '-'; }
+  function levelChip(l) {
+    if (l === 'J') return '<span class="chip j">Junior</span>';
+    if (l === 'P') return '<span class="chip p">Primary</span>';
+    if (l === 'B') return '<span class="chip b">Both levels</span>';
+    return '<span class="chip">No lessons</span>';
+  }
+  function time(m) { return TT.fmt(m); }
+
+  function checks() {
+    var d = S.data, tot = TT.classTotals(d), lv = TT.teacherLevels(d);
+    var over = [], under = [], unassigned = 0, overT = [];
+    d.classes.forEach(function (c) {
+      var slots = TT.slotsFor(c.section);
+      if (tot[c.id] > slots) over.push({ c: c, n: tot[c.id] - slots });
+      else if (tot[c.id] < slots) under.push({ c: c, n: slots - tot[c.id] });
+    });
+    d.assignments.forEach(function (a) { if (!a.teacher) unassigned += a.lessons; });
+    var maxLoad = 0, impossible = [];
+    d.teachers.forEach(function (t) {
+      var l = lv[t.id], n = l.J + l.P; if (n > maxLoad) maxLoad = n;
+      var room = l.J ? TT.slotsFor('J') : TT.slotsFor('P');
+      if (n > room) impossible.push({ t: t, n: n, room: room });
+      else if (n > (t.max || 30)) overT.push({ t: t, n: n });
+    });
+    return { over: over, under: under, unassigned: unassigned, overT: overT, impossible: impossible, maxLoad: maxLoad, lv: lv, tot: tot, blocking: over.length > 0 };
+  }
+
+  /* ---------- views ---------- */
+  function dayBar() {
+    var t0 = 500, t1 = 920, span = t1 - t0;
+    function row(sec, label, cls) {
+      var h = TT.BELLS[sec].map(function (b) {
+        return '<i class="blk ' + cls + '" style="left:' + ((b.s - t0) / span * 100).toFixed(2) + '%;width:' + ((b.e - b.s) / span * 100).toFixed(2) + '%"></i>';
+      }).join('');
+      return '<div class="dbrow"><span class="' + cls + '">' + label + '</span><div class="track" role="img" aria-label="' + label + ' lessons from 8:20 to ' + (sec === 'J' ? '3:20' : '2:35') + '">' + h + '</div></div>';
+    }
+    var ticks = [[540, '9'], [600, '10'], [660, '11'], [720, '12'], [780, '1'], [840, '2'], [900, '3']].map(function (x) {
+      return '<i style="left:' + ((x[0] - t0) / span * 100).toFixed(2) + '%">' + x[1] + '</i>';
+    }).join('');
+    return '<div class="daybar">' + row('J', 'Junior 40 min', 'j') + row('P', 'Primary 35 min', 'p') + '<div class="axis">' + ticks + '</div></div>';
+  }
+
+  function genView() {
+    var d = S.data, ck = checks(), r = S.gen.result;
+    var nJ = d.classes.filter(function (c) { return c.section === 'J'; }).length, nP = d.classes.length - nJ;
+    var h = '<section class="hero"><p class="eyebrow">Weekly timetable</p><h1>' + esc(d.school) + '</h1>' +
+      '<p class="muted">' + nJ + ' junior classes and ' + nP + ' primary classes share ' + d.teachers.length + ' teachers across one Monday to Friday week.</p>' + dayBar() + '</section>';
+
+    if (S.sample) h += '<div class="banner warn"><span>You are looking at sample teachers and lessons. Import your own from Excel, or edit them by hand.</span><button class="btn sm" data-action="nav" data-v="lessons">Import lessons</button></div>';
+    if (S.stale) h += '<div class="banner warn"><span>Lessons or teachers changed after this timetable was made. Generate again to update it.</span></div>';
+
+    // checks
+    var items = [];
+    if (ck.over.length) items.push(['bad', 'Too many lessons', ck.over.map(function (x) { return esc(x.c.name) + ' by ' + x.n; }).join(', ') + '. Reduce lessons in the Lessons tab.']);
+    else items.push(['ok', 'Every class fits its week', 'No class has more lessons than periods.']);
+    if (ck.under.length) items.push(['warn', 'Free periods', ck.under.length + ' class' + (ck.under.length > 1 ? 'es have' : ' has') + ' fewer lessons than periods, so free periods will appear: ' + ck.under.slice(0, 6).map(function (x) { return esc(x.c.name) + ' (' + x.n + ')'; }).join(', ') + (ck.under.length > 6 ? ' and more' : '') + '.']);
+    if (ck.unassigned) items.push(['warn', 'No teacher yet', ck.unassigned + ' lessons have no teacher. They are placed but cannot be checked for clashes.']);
+    if (ck.impossible.length) items.push(['bad', 'Too many lessons for one teacher', ck.impossible.slice(0, 5).map(function (x) { return esc(x.t.name) + ' has ' + x.n; }).join(', ') + '. A week has only ' + ck.impossible[0].room + ' periods for them, so they cannot be placed without clashes. Share some of their lessons in the Lessons tab.']);
+    if (ck.overT.length) items.push(['warn', 'Heavy teacher loads', ck.overT.slice(0, 5).map(function (x) { return esc(x.t.name) + ' ' + x.n; }).join(', ') + ' lessons a week, above their limit.']);
+    else items.push(['ok', 'Teacher loads', 'Heaviest load is ' + ck.maxLoad + ' lessons a week.']);
+    h += '<section class="card"><header><h2>Before you generate</h2></header><div class="list">' + items.map(function (it) {
+      return '<div class="li"><div><b>' + it[1] + '</b><p class="muted small">' + it[2] + '</p></div><span class="chip ' + it[0] + '">' + (it[0] === 'ok' ? 'OK' : it[0] === 'bad' ? 'Fix' : 'Note') + '</span></div>';
+    }).join('') + '</div></section>';
+
+    // rules
+    h += '<section class="card"><header><h2>Rules</h2></header>' +
+      '<div class="row"><div><b>Changeover time</b><p class="muted small">Minutes a teacher needs between a primary and a junior lesson.</p></div>' +
+      '<div class="stepper"><button data-action="buf" data-v="-1" aria-label="Less changeover time">&minus;</button><output id="buf-out">' + (d.buffer == null ? 5 : d.buffer) + '</output><button data-action="buf" data-v="1" aria-label="More changeover time">+</button></div></div>' +
+      '<div class="row"><div><b>Most lessons a teacher has in one day</b><p class="muted small">Going over this is avoided where possible.</p></div>' +
+      '<div class="stepper"><button data-action="maxday" data-v="-1" aria-label="Fewer lessons a day">&minus;</button><output id="md-out">' + (d.maxPerDay || 7) + '</output><button data-action="maxday" data-v="1" aria-label="More lessons a day">+</button></div></div>' +
+      '<p class="muted small">Always enforced: no teacher in two places at once, no class with two lessons at once, and teachers marked off on a day get no lessons that day. Avoided where possible: the same subject twice in a day, and core subjects in the last two periods.</p></section>';
+
+    // generate
+    h += '<section class="card"><header><h2>Make the timetable</h2></header>';
+    h += '<button class="btn primary big" id="gen-btn" data-action="gen"' + (S.gen.running || ck.blocking ? ' disabled' : '') + '>' + (S.gen.running ? 'Working…' : (S.cells ? 'Generate a new timetable' : 'Generate timetable')) + '</button>';
+    if (S.gen.running) h += '<div class="progress" role="progressbar" aria-label="Generating" aria-valuemin="0" aria-valuemax="100"><i id="gen-bar" style="width:' + Math.round(S.gen.p * 100) + '%"></i></div>';
+    if (r && !S.gen.running) {
+      var q = quality();
+      h += '<div class="metrics">' +
+        '<div class="metric"><b style="color:var(--' + (r.clashes ? 'bad' : 'ok') + ')">' + r.clashes + '</b><span>teacher clashes</span></div>' +
+        '<div class="metric"><b>' + q.dupDays + '</b><span>class days with a repeated subject</span></div>' +
+        '<div class="metric"><b>' + q.coreLate + '</b><span>core lessons in the last two periods</span></div>' +
+        '<div class="metric"><b>' + (r.ms / 1000).toFixed(1) + 's</b><span>time taken</span></div></div>';
+      if (r.clashes) h += '<div class="banner bad"><span>' + r.clashes + ' clash' + (r.clashes > 1 ? 'es' : '') + ' could not be removed: ' + esc(r.names) + '. Try again, lower the changeover time, give these teachers fewer lessons or fewer off days.</span></div>';
+      else h += '<p class="small" style="color:var(--ok)"><b>No clashes.</b> Every teacher is in one place at a time, including teachers who cross between primary and junior.</p>';
+      h += '<button class="btn" data-action="nav" data-v="view">Open timetable</button>';
+    }
+    h += '</section>';
+
+    // data
+    h += '<section class="card"><details><summary>Backup and restore</summary><div style="display:flex;flex-direction:column;gap:10px;padding-top:6px">' +
+      '<p class="muted small">Your work is kept in this browser. Save a backup file to move it to another phone or computer.</p>' +
+      '<div class="btnrow">' + (DL ? '<button class="btn" data-action="backup">Save backup</button>' : '') +
+      '<button class="btn" data-action="backupcopy">Copy backup text</button>' +
+      '<label class="btn" for="restore-file" style="display:inline-flex;align-items:center">Restore backup</label><input id="restore-file" type="file" accept=".json,application/json" hidden>' +
+      '<button class="btn danger" data-action="reset">Reset to sample data</button></div></div></details></section>';
+    return h;
+  }
+
+  function quality() {
+    var dup = 0, late = 0;
+    if (!S.cells) return { dupDays: 0, coreLate: 0 };
+    var cb = cById();
+    Object.keys(S.cells).forEach(function (cid) {
+      var np = S.cells[cid][0] ? S.cells[cid][0].length : 0;
+      S.cells[cid].forEach(function (row) {
+        var m = {};
+        row.forEach(function (cell, p) {
+          if (!cell.s) return;
+          m[cell.s] = (m[cell.s] || 0) + 1;
+          if (TT.CORE.indexOf(cell.s) >= 0 && p >= np - 2) late++;
+        });
+        for (var k in m) if (m[k] > 1) dup++;
+      });
+    });
+    return { dupDays: dup, coreLate: late };
+  }
+
+  /* ---- timetable view ---- */
+  function cellHtml(cell, opts) {
+    // opts: cls, d, p, bad, sel, label
+    var attr = ' data-action="cell" data-cls="' + esc(opts.cls) + '" data-d="' + opts.d + '" data-p="' + opts.p + '"';
+    if (!cell || !cell.s) return '<button class="cell free' + (opts.sel ? ' sel' : '') + '"' + attr + ' aria-label="Free period">free</button>';
+    var cls = 'cell' + (opts.bad ? ' bad' : '') + (opts.sel ? ' sel' : '');
+    return '<button class="' + cls + '" style="--h:' + hue(cell.s) + '"' + attr + '><b>' + esc(opts.top) + '</b><span>' + esc(opts.bottom) + '</span></button>';
+  }
+
+  function classGrid(cid, V) {
+    var c = cById()[cid], tm = tById(), sec = c.section, bells = TT.BELLS[sec], rows = S.cells[cid];
+    var h = '<div class="ttwrap"><div class="tt"><div class="th"></div>' + TT.DAYS.map(function (d, i) { return '<div class="th">' + d + '</div>'; }).join('');
+    var li = 0;
+    TT.SCHEDULE[sec].forEach(function (item) {
+      if (item.t === 'B') { h += '<div class="brk">' + item.label + ' &middot; ' + time(item.s) + '&ndash;' + time(item.e) + '</div>'; return; }
+      var p = li++;
+      h += '<div class="rh"><b>' + (p + 1) + '</b><i class="' + (sec === 'J' ? 'j' : 'p') + '">' + time(item.s) + '</i><i>' + time(item.e) + '</i></div>';
+      for (var d = 0; d < 5; d++) {
+        var cell = rows[d][p];
+        var key = cid + '|' + d + '|' + p;
+        h += cellHtml(cell, { cls: cid, d: d, p: p, bad: V.bad[key], sel: S.pick && S.pick.cls === cid && S.pick.d === d && S.pick.p === p, top: abbr(cell.s), bottom: shortName(tm[cell.t]) });
+      }
+    });
+    return h + '</div></div>';
+  }
+
+  function teacherGrid(tid, V) {
+    var tm = tById(), cb = cById(), lv = TT.teacherLevels(S.data)[tid] || { J: 0, P: 0 };
+    var lvl = levelOf(lv);
+    var showJ = lvl !== 'P', showP = lvl !== 'J';
+    // map d|row -> list of {cls, s}
+    var map = {}, perDay = [0, 0, 0, 0, 0], total = 0;
+    Object.keys(S.cells).forEach(function (cid) {
+      S.cells[cid].forEach(function (row, d) {
+        row.forEach(function (cell, p) {
+          if (cell.t === tid) { var k = d + '|' + p; (map[k] = map[k] || []).push({ cls: cid, s: cell.s, p: p }); perDay[d]++; total++; }
+        });
+      });
+    });
+    var nRows = showJ ? 8 : 7;
+    var h = '<div class="ttwrap"><div class="tt"><div class="th"></div>' + TT.DAYS.map(function (d, i) { return '<div class="th">' + d + '<small>' + perDay[i] + '</small></div>'; }).join('');
+    var jb = TT.BELLS.J, pb = TT.BELLS.P;
+    for (var n = 0; n < nRows; n++) {
+      if (n === 2 || n === 4 || n === 6) {
+        var lab = n === 6 ? 'Lunch' : 'Break';
+        var jt = TT.SCHEDULE.J.filter(function (x) { return x.t === 'B'; })[n / 2 - 1];
+        var pt = TT.SCHEDULE.P.filter(function (x) { return x.t === 'B'; })[n / 2 - 1];
+        var parts = [];
+        if (showJ) parts.push('J ' + time(jt.s) + '&ndash;' + time(jt.e));
+        if (showP) parts.push('P ' + time(pt.s) + '&ndash;' + time(pt.e));
+        h += '<div class="brk">' + lab + ' &middot; ' + parts.join(' &middot; ') + '</div>';
+      }
+      var rh = '<div class="rh"><b>' + (n + 1) + '</b>';
+      var both = showJ && showP;
+      if (showJ && jb[n]) rh += '<i class="j">' + time(jb[n].s) + (both ? '' : '</i><i>' + time(jb[n].e)) + '</i>';
+      if (showP && pb[n]) rh += '<i class="p">' + time(pb[n].s) + (both ? '' : '</i><i>' + time(pb[n].e)) + '</i>';
+      h += rh + '</div>';
+      for (var d = 0; d < 5; d++) {
+        var list = map[d + '|' + n] || [];
+        if (!list.length) { h += '<div class="cell empty"></div>'; continue; }
+        var it = list[0], cellObj = { s: it.s };
+        var bad = list.some(function (x) { return V.bad[x.cls + '|' + d + '|' + x.p]; });
+        var top = shortClass(cb[it.cls]) + (list.length > 1 ? ' +' + (list.length - 1) : '');
+        h += cellHtml(cellObj, { cls: it.cls, d: d, p: it.p, bad: bad, top: top, bottom: abbr(it.s) });
+      }
+    }
+    return { html: h + '</div></div>', total: total, perDay: perDay, lvl: lvl };
+  }
+
+  function viewView() {
+    if (!S.cells) {
+      return '<section class="hero"><p class="eyebrow">Timetable</p><h1>Nothing to show yet</h1></section>' +
+        '<section class="card"><div class="empty-state"><p class="muted">Generate a timetable first, then browse it by class or by teacher.</p><button class="btn primary" data-action="nav" data-v="gen">Go to Generate</button></div></section>';
+    }
+    var d = S.data, V = TT.validate(d, S.cells), cb = cById(), tm = tById();
+    if (!S.selClass || !cb[S.selClass]) S.selClass = d.classes[0].id;
+    var lvAll = TT.teacherLevels(d);
+    var tsorted = d.teachers.slice().sort(function (a, b) { return a.name.localeCompare(b.name); });
+    if (!S.selTeacher || !tm[S.selTeacher]) S.selTeacher = tsorted[0] && tsorted[0].id;
+
+    var h = '<section class="hero"><p class="eyebrow">Timetable</p><h1>' + (S.vmode === 'class' ? 'By class' : S.vmode === 'school' ? 'Whole school' : 'By teacher') + '</h1></section>';
+    if (S.stale) h += '<div class="banner warn"><span>Lessons changed since this was generated.</span><button class="btn sm" data-action="nav" data-v="gen">Generate again</button></div>';
+    var nclash = V.clashes.length + V.offHits.length;
+    if (nclash) h += '<div class="banner bad"><span>' + nclash + ' clash' + (nclash > 1 ? 'es' : '') + ' marked with ! in the grid.</span></div>';
+
+    h += '<section class="card"><div class="row"><div class="seg" role="group" aria-label="View by"><button data-action="vmode" data-v="class" aria-pressed="' + (S.vmode === 'class') + '">Classes</button><button data-action="vmode" data-v="teacher" aria-pressed="' + (S.vmode === 'teacher') + '">Teachers</button><button data-action="vmode" data-v="school" aria-pressed="' + (S.vmode === 'school') + '">School</button></div>';
+    if (S.vmode === 'class') h += '<button class="btn sm' + (S.edit ? ' primary' : '') + '" data-action="edit" aria-pressed="' + S.edit + '">' + (S.edit ? 'Done swapping' : 'Swap lessons') + '</button>';
+    h += '</div>';
+
+    var idx, sel;
+    if (S.vmode === 'school') {
+      h += masterSection(V);
+    } else if (S.vmode === 'class') {
+      var opts = ['J', 'P'].map(function (sec) {
+        return '<optgroup label="' + (sec === 'J' ? 'Junior school' : 'Primary school') + '">' + d.classes.filter(function (c) { return c.section === sec; }).map(function (c) {
+          return '<option value="' + esc(c.id) + '"' + (c.id === S.selClass ? ' selected' : '') + '>' + esc(c.name) + '</option>';
+        }).join('') + '</optgroup>';
+      }).join('');
+      h += '<div class="pick"><button class="btn" data-action="step" data-v="-1" aria-label="Previous class">&lsaquo;</button><div class="field"><label for="sel-class">Class</label><select class="inp" id="sel-class">' + opts + '</select></div><button class="btn" data-action="step" data-v="1" aria-label="Next class">&rsaquo;</button></div>';
+      var c = cb[S.selClass], tot = TT.slotsFor(c.section);
+      h += '<div class="row small muted"><span>' + (c.section === 'J' ? '<span class="chip j">Junior &middot; 40 min</span>' : '<span class="chip p">Primary &middot; 35 min</span>') + '</span><span>' + tot + ' periods a week</span></div>';
+      if (S.edit) h += '<p class="small muted">Tap a lesson, then tap another lesson in this class to swap them. Clashes show a red outline.' + (S.undo ? ' <button class="btn sm" data-action="undo">Undo last swap</button>' : '') + '</p>';
+      h += classGrid(S.selClass, V);
+      // teacher key
+      var used = {}; S.cells[S.selClass].forEach(function (r) { r.forEach(function (x) { if (x.t) used[x.s + '|' + x.t] = 1; }); });
+      h += '<details><summary>Who teaches what</summary><div class="list">' + Object.keys(used).map(function (k) { var a = k.split('|'); return '<div class="li"><span>' + esc(a[0]) + '</span><span class="muted">' + esc(tm[a[1]] ? tm[a[1]].name : '') + '</span></div>'; }).join('') + '</div></details>';
+    } else {
+      var groups = { J: [], P: [], B: [], '-': [] };
+      tsorted.forEach(function (t) { var l = lvAll[t.id]; groups[levelOf(l)].push(t); });
+      var gl = { J: 'Junior only', P: 'Primary only', B: 'Both levels', '-': 'No lessons' };
+      var opts2 = ['B', 'J', 'P', '-'].filter(function (k) { return groups[k].length; }).map(function (k) {
+        return '<optgroup label="' + gl[k] + '">' + groups[k].map(function (t) { return '<option value="' + esc(t.id) + '"' + (t.id === S.selTeacher ? ' selected' : '') + '>' + esc(t.name) + ' &middot; ' + esc(t.area || '') + '</option>'; }).join('') + '</optgroup>';
+      }).join('');
+      h += '<div class="pick"><button class="btn" data-action="step" data-v="-1" aria-label="Previous teacher">&lsaquo;</button><div class="field"><label for="sel-teacher">Teacher</label><select class="inp" id="sel-teacher">' + opts2 + '</select></div><button class="btn" data-action="step" data-v="1" aria-label="Next teacher">&rsaquo;</button></div>';
+      var g = S.selTeacher ? teacherGrid(S.selTeacher, V) : null;
+      if (g) {
+        var l2 = g.lvl;
+        h += '<div class="row small muted"><span>' + levelChip(l2) + '</span><span>' + g.total + ' lessons a week</span></div>';
+        if (l2 === 'B') h += '<p class="small muted">Start times: <span style="color:var(--junior);font-weight:600">blue</span> for junior (40 min lessons) and <span style="color:var(--primary);font-weight:600">green</span> for primary (35 min lessons).</p>';
+        h += g.html;
+      }
+    }
+    h += '</section>';
+
+    h += '<section class="card"><header><h2>Share or print</h2></header><p class="muted small">Copy a timetable and paste it into Word, Excel or WhatsApp, or save it as a file that opens in Excel.</p><div class="btnrow">' +
+      '<button class="btn" data-action="copyview">Copy this one</button>' +
+      (DL ? '<button class="btn" data-action="saveview">Save this one</button>' + (S.vmode === 'school' ? '<button class="btn" data-action="saveprint">Save for printing</button>' : '') + '<button class="btn" data-action="saveclasses">Save all classes</button><button class="btn" data-action="saveteachers">Save all teachers</button>' : '') +
+      '</div></section>';
+    return h;
+  }
+
+  /* ---- teachers view ---- */
+  function teachersView() {
+    var d = S.data, ck = checks();
+    var list = d.teachers.filter(function (t) {
+      var l = levelOf(ck.lv[t.id]);
+      if (S.fLevel !== 'all' && l !== S.fLevel) return false;
+      if (S.fQ && (t.name + ' ' + (t.area || '')).toLowerCase().indexOf(S.fQ.toLowerCase()) < 0) return false;
+      return true;
+    });
+    var counts = { J: 0, P: 0, B: 0 };
+    d.teachers.forEach(function (t) { var l = levelOf(ck.lv[t.id]); if (counts[l] != null) counts[l]++; });
+    var h = '<section class="hero"><p class="eyebrow">Setup</p><h1>Teachers</h1><p class="muted">' + counts.J + ' teach junior only, ' + counts.P + ' primary only and ' + counts.B + ' teach both. The level follows from the lessons you assign.</p></section>';
+    h += '<section class="card"><div class="tgrid"><div class="field"><label for="f-level">Show</label><select class="inp" id="f-level">' +
+      [['all', 'Everyone'], ['J', 'Junior only'], ['P', 'Primary only'], ['B', 'Both levels'], ['-', 'No lessons yet']].map(function (o) { return '<option value="' + o[0] + '"' + (S.fLevel === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') +
+      '</select></div><div class="field"><label for="f-q">Search</label><input class="inp" id="f-q" type="search" placeholder="Name or subject" value="' + esc(S.fQ) + '"></div></div>' +
+      '<button class="btn" data-action="tadd">Add a teacher</button></section>';
+    h += '<section class="card" id="tlist">';
+    if (!list.length) h += '<p class="muted">No teachers match.</p>';
+    list.forEach(function (t) {
+      var lv = ck.lv[t.id], n = lv.J + lv.P, mx = t.max || 30, pct = Math.min(100, Math.round(n / mx * 100));
+      h += '<div class="tcard"><div class="row"><b>' + esc(t.name) + '</b>' + levelChip(levelOf(lv)) + '</div>' +
+        '<div class="tgrid"><div class="field"><label for="tn-' + t.id + '">Name</label><input class="inp" id="tn-' + t.id + '" data-bind="tname" data-id="' + t.id + '" value="' + esc(t.name) + '"></div>' +
+        '<div class="field"><label for="ta-' + t.id + '">Teaches</label><input class="inp" id="ta-' + t.id + '" data-bind="tarea" data-id="' + t.id + '" value="' + esc(t.area || '') + '"></div></div>' +
+        '<div class="row small"><span>' + n + ' of ' + mx + ' lessons a week' + (lv.J && lv.P ? ' (' + lv.J + ' junior, ' + lv.P + ' primary)' : '') + '</span>' +
+        '<span class="stepper" aria-label="Weekly limit"><button data-action="tmax" data-id="' + t.id + '" data-v="-1" aria-label="Lower weekly limit">&minus;</button><output>' + mx + '</output><button data-action="tmax" data-id="' + t.id + '" data-v="1" aria-label="Raise weekly limit">+</button></span></div>' +
+        '<div class="bar"><i class="' + (n > mx ? 'over' : '') + '" style="width:' + pct + '%"></i></div>' +
+        '<div class="small muted">Not available on</div><div class="days">' + TT.DAYS.map(function (dn, i) { return '<button data-action="toff" data-id="' + t.id + '" data-d="' + i + '" aria-pressed="' + ((t.off || []).indexOf(i) >= 0) + '">' + dn + '</button>'; }).join('') + '</div>' +
+        '<div class="btnrow"><button class="btn sm danger" data-action="tdel" data-id="' + t.id + '"' + (n > 0 || d.assignments.some(function (a) { return a.teacher === t.id; }) ? ' disabled title="Reassign their lessons first"' : '') + '>Remove</button>' +
+        ((n > 0) ? '<span class="small muted" style="align-self:center">Reassign their lessons to remove</span>' : '') + '</div></div>';
+    });
+    h += '</section>';
+    return h;
+  }
+
+  /* ---- lessons view ---- */
+  function lessonsView() {
+    var d = S.data, cb = cById();
+    if (!S.lClass || !cb[S.lClass]) S.lClass = d.classes[0].id;
+    var c = cb[S.lClass], slots = TT.slotsFor(c.section), ck = checks(), tot = ck.tot[c.id];
+    var opts = ['J', 'P'].map(function (sec) {
+      return '<optgroup label="' + (sec === 'J' ? 'Junior school' : 'Primary school') + '">' + d.classes.filter(function (x) { return x.section === sec; }).map(function (x) {
+        var t = ck.tot[x.id], sl = TT.slotsFor(x.section);
+        return '<option value="' + esc(x.id) + '"' + (x.id === S.lClass ? ' selected' : '') + '>' + esc(x.name) + (t === sl ? '' : ' (' + t + '/' + sl + ')') + '</option>';
+      }).join('') + '</optgroup>';
+    }).join('');
+    var h = '<section class="hero"><p class="eyebrow">Setup</p><h1>Lessons</h1><p class="muted">What each class learns each week and who teaches it. Rows marked with a number of lessons fill the class’s ' + slots + ' periods.</p></section>';
+    h += '<section class="card"><header><h2>Import from Excel</h2></header><p class="muted small">Make a sheet with one row for each teacher, subject and class: Teacher code, Subject, Class and Lessons a week. Save it as CSV or copy the cells, then load it here. Teachers are matched by code, so T5, 5 and "5 Mwangi" are the same teacher.</p>' +
+      '<div class="btnrow"><label class="btn primary" for="imp-file">Choose CSV file</label><input id="imp-file" type="file" accept=".csv,.tsv,.txt,text/csv,text/plain" hidden><button class="btn" data-action="imp-paste">Paste from Excel</button></div>' +
+      '<details><summary>Need a starting sheet?</summary><div style="display:flex;flex-direction:column;gap:8px;padding-top:4px"><p class="muted small">Download the template, fill it in and import it. Or save what is in the app now, change it in Excel and import it back.</p><div class="btnrow"><button class="btn sm" data-action="imp-template">Template</button><button class="btn sm" data-action="imp-export">Current lessons</button></div></div></details></section>';
+    h += '<section class="card"><div class="pick"><button class="btn" data-action="lstep" data-v="-1" aria-label="Previous class">&lsaquo;</button><div class="field"><label for="sel-lclass">Class</label><select class="inp" id="sel-lclass">' + opts + '</select></div><button class="btn" data-action="lstep" data-v="1" aria-label="Next class">&rsaquo;</button></div>' +
+      '<div class="field"><label for="cn-' + c.id + '">Class name</label><input class="inp" id="cn-' + c.id + '" data-bind="cname" data-id="' + c.id + '" value="' + esc(c.name) + '"></div>' +
+      '<div class="row small"><span><b>' + tot + ' of ' + slots + '</b> periods filled</span><span class="chip ' + (tot === slots ? 'ok' : tot > slots ? 'bad' : 'warn') + '">' + (tot === slots ? 'Full week' : tot > slots ? (tot - slots) + ' too many' : (slots - tot) + ' free') + '</span></div>' +
+      '<div class="bar"><i class="' + (tot === slots ? 'full' : tot > slots ? 'over' : '') + '" style="width:' + Math.min(100, Math.round(tot / slots * 100)) + '%"></i></div></section>';
+
+    var tsorted = d.teachers.slice().sort(function (a, b) { return (a.area || '').localeCompare(b.area || '') || a.name.localeCompare(b.name); });
+    var rows = '';
+    d.assignments.forEach(function (a, i) {
+      if (a.cls !== c.id) return;
+      var topts = '<option value=""' + (!a.teacher ? ' selected' : '') + '>No teacher yet</option>' + tsorted.map(function (t) {
+        var l = ck.lv[t.id];
+        return '<option value="' + t.id + '"' + (a.teacher === t.id ? ' selected' : '') + '>' + esc(t.name) + ' &middot; ' + esc((t.area || '').slice(0, 24)) + ' (' + (l.J + l.P) + ')</option>';
+      }).join('');
+      rows += '<div class="lrow"><div class="field"><label for="ls-' + i + '">Subject</label><input class="inp" id="ls-' + i + '" data-bind="lsubj" data-i="' + i + '" value="' + esc(a.subject) + '"></div>' +
+        '<div class="field"><label>Lessons</label><div class="stepper"><button data-action="lless" data-i="' + i + '" data-v="-1" aria-label="Fewer lessons">&minus;</button><output>' + a.lessons + '</output><button data-action="lless" data-i="' + i + '" data-v="1" aria-label="More lessons">+</button></div></div>' +
+        '<div class="field wide"><label for="lt-' + i + '">Teacher</label><select class="inp" id="lt-' + i + '" data-bind="lteach" data-i="' + i + '">' + topts + '</select></div>' +
+        '<div class="field wide"><button class="btn sm danger" data-action="ldel" data-i="' + i + '" style="align-self:flex-start">Remove subject</button></div></div>';
+    });
+    h += '<section class="card">' + (rows || '<p class="muted">No subjects yet.</p>') + '<button class="btn" data-action="ladd">Add a subject</button></section>';
+    return h;
+  }
+
+  /* ---- bells view ---- */
+  function bellsView() {
+    function table(sec, title, cls) {
+      var n = 0;
+      return '<div><h3 class="' + cls + '" style="color:var(--' + (sec === 'J' ? 'junior' : 'primary') + ')">' + title + '</h3><table>' + TT.SCHEDULE[sec].map(function (x) {
+        if (x.t === 'B') return '<tr class="b"><td>' + x.label + '</td><td>' + time(x.s) + '&ndash;' + time(x.e) + '</td></tr>';
+        n++; return '<tr><td>Lesson ' + n + ' <span class="muted small">' + (x.e - x.s) + ' min</span></td><td>' + time(x.s) + '&ndash;' + time(x.e) + '</td></tr>';
+      }).join('') + '</table></div>';
+    }
+    var jt = TT.slotsFor('J'), pt = TT.slotsFor('P');
+    return '<section class="hero"><p class="eyebrow">Setup</p><h1>School day</h1><p class="muted">Junior has ' + jt / 5 + ' lessons a day (' + jt + ' a week). Primary has ' + pt / 5 + ' (' + pt + ' a week), with only one lesson in the afternoon.</p></section>' +
+      '<section class="card">' + dayBar() + '</section>' +
+      '<section class="card"><div class="sched">' + table('J', 'Junior school', 'j') + table('P', 'Primary school', 'p') + '</div>' +
+      '<p class="muted small">Primary and junior lessons line up again after each break, at 9:55, 11:30 and 2:00. Primary breaks run slightly longer to use up the 5 minutes its shorter lessons save in each period. The timetable treats a primary lesson and a junior lesson as overlapping when they are less than the changeover time apart, so a teacher who crosses over always has time to move.</p></section>';
+  }
+
+  /* ---------- render ---------- */
+  var VIEWS = [['gen', 'Generate'], ['view', 'Timetable'], ['teachers', 'Teachers'], ['lessons', 'Lessons'], ['bells', 'Bells']];
+  var FULLDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+  function masterClasses() {
+    function ord(list) {
+      return list.map(function (c, i) { return [c, i]; }).sort(function (x, y) { return ((x[0].grade || 0) - (y[0].grade || 0)) || (x[1] - y[1]); }).map(function (x) { return x[0]; });
+    }
+    return { J: ord(S.data.classes.filter(function (c) { return c.section === 'J'; })), P: ord(S.data.classes.filter(function (c) { return c.section === 'P'; })) };
+  }
+  function bkc(p) { return p === 5 ? ' bk lk' : (p === 1 || p === 3) ? ' bk' : ''; }
+  function plainName(c) { return c.name.replace(/^Grade\s+/i, ''); }
+  function daysOf(day) { return day === 'week' ? [0, 1, 2, 3, 4] : [Number(day)]; }
+
+  function masterTable(day, V) {
+    var tm = tById(), mc = masterClasses(), days = daysOf(day), NP = 8, h;
+    h = '<div class="mtwrap"><table class="mt"><thead><tr><th class="cl" rowspan="2">Class</th>';
+    days.forEach(function (d) { h += '<th colspan="' + NP + '" class="dh">' + FULLDAYS[d] + '</th>'; });
+    h += '</tr><tr>';
+    days.forEach(function () { for (var p = 0; p < NP; p++) h += '<th class="' + bkc(p).trim() + '">' + (p + 1) + '</th>'; });
+    h += '</tr></thead><tbody>';
+    [['J', 'Junior school · 40 minute lessons', 'j'], ['P', 'Primary school · 35 minute lessons', 'p']].forEach(function (g) {
+      var sec = g[0], bells = TT.BELLS[sec];
+      h += '<tr class="sec ' + g[2] + '"><th colspan="' + (1 + days.length * NP) + '">' + g[1] + '</th></tr>';
+      h += '<tr class="tmr"><th class="cl">Starts</th>';
+      days.forEach(function () { for (var p = 0; p < NP; p++) h += '<th class="' + bkc(p).trim() + '">' + (bells[p] ? time(bells[p].s) : '') + '</th>'; });
+      h += '</tr>';
+      mc[sec].forEach(function (c) {
+        h += '<tr><th class="cl"><button class="cn" data-action="gotoclass" data-cls="' + esc(c.id) + '" aria-label="Open ' + esc(c.name) + '">' + esc(plainName(c)) + '</button></th>';
+        days.forEach(function (d) {
+          for (var p = 0; p < NP; p++) {
+            if (p >= bells.length) { h += '<td class="c na' + bkc(p) + '"></td>'; continue; }
+            var x = S.cells[c.id][d][p], bad = V.bad[c.id + '|' + d + '|' + p] ? ' bad' : '';
+            if (!x.s) { h += '<td class="c free' + bkc(p) + bad + '">&ndash;</td>'; continue; }
+            var dim = S.hl && x.t !== S.hl ? ' dim' : '', hit = S.hl && x.t === S.hl ? ' hit' : '';
+            h += '<td class="c' + bkc(p) + bad + dim + hit + '" style="--h:' + hue(x.s) + '"><b>' + esc(abbr(x.s)) + '</b><span>' + esc(shortName(tm[x.t])) + '</span></td>';
+          }
+        });
+        h += '</tr>';
+      });
+    });
+    return h + '</tbody></table></div>';
+  }
+
+  function masterSection(V) {
+    var d = S.data, tm = tById(), lv = TT.teacherLevels(d);
+    var tlist = d.teachers.filter(function (t) { return lv[t.id] && (lv[t.id].J + lv[t.id].P) > 0; });
+    tlist.sort(function (a, b) { var x = /^T(\d+)$/.exec(a.id), y = /^T(\d+)$/.exec(b.id); return x && y ? x[1] - y[1] : a.name.localeCompare(b.name); });
+    if (S.hl && !tm[S.hl]) S.hl = '';
+    var h = '<div class="seg days" role="group" aria-label="Day">' + TT.DAYS.map(function (n, i) { return '<button data-action="mday" data-v="' + i + '" aria-pressed="' + (S.mDay === String(i)) + '">' + n + '</button>'; }).join('') +
+      '<button data-action="mday" data-v="week" aria-pressed="' + (S.mDay === 'week') + '">Week</button></div>';
+    h += '<div class="field"><label for="hl-teacher">Highlight a teacher</label><select class="inp" id="hl-teacher"><option value="">Nobody</option>' +
+      tlist.map(function (t) { return '<option value="' + esc(t.id) + '"' + (S.hl === t.id ? ' selected' : '') + '>' + esc(t.name) + (t.area ? ' · ' + esc(t.area.slice(0, 26)) : '') + '</option>'; }).join('') + '</select></div>';
+    h += '<p class="small muted">Each cell shows the subject and the teacher. Heavier lines mark the breaks after lessons 2 and 4 and lunch after lesson 6. Tap a class name to open its own timetable.</p>';
+    h += masterTable(S.mDay, V);
+    var used = {}; Object.keys(S.cells).forEach(function (cid) { S.cells[cid].forEach(function (r) { r.forEach(function (x) { if (x.s) used[x.s] = 1; }); }); });
+    h += '<details><summary>Key to subjects</summary><div class="list">' + Object.keys(used).sort().map(function (n) { return '<div class="li"><span><b>' + esc(abbr(n)) + '</b></span><span class="muted">' + esc(n) + '</span></div>'; }).join('') + '</div></details>';
+    return h;
+  }
+
+  function masterRows(day) {
+    var days = daysOf(day), mc = masterClasses(), tm = tById(), rows = [], head = ['Class'], tj = ['Junior lesson starts'], tp = ['Primary lesson starts'];
+    days.forEach(function (d) {
+      for (var p = 0; p < 8; p++) {
+        head.push(TT.DAYS[d] + ' L' + (p + 1));
+        tj.push(TT.BELLS.J[p] ? time(TT.BELLS.J[p].s) : '');
+        tp.push(TT.BELLS.P[p] ? time(TT.BELLS.P[p].s) : '');
+      }
+    });
+    rows.push(head);
+    ['J', 'P'].forEach(function (sec) {
+      rows.push(sec === 'J' ? tj : tp);
+      mc[sec].forEach(function (c) {
+        var r = [c.name];
+        days.forEach(function (d) {
+          for (var p = 0; p < 8; p++) {
+            var x = p < TT.BELLS[sec].length ? S.cells[c.id][d][p] : null;
+            r.push(x && x.s ? abbr(x.s) + (x.t ? ' ' + shortName(tm[x.t]) : '') : '');
+          }
+        });
+        rows.push(r);
+      });
+    });
+    return rows;
+  }
+
+  function masterPrintHtml() {
+    var mc = masterClasses(), tm = tById(), NP = 8, used = {};
+    function bk(p) { return p === 5 ? ' lk' : (p === 1 || p === 3) ? ' bk' : ''; }
+    var css = '@page{size:A3 landscape;margin:9mm}*{box-sizing:border-box}html{-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      'body{font-family:Arial,Helvetica,sans-serif;color:#14213d;margin:0;padding:12px;background:#fff}' +
+      '.bar{background:#dfe5fb;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:14px}' +
+      '.pg{page-break-after:always;break-after:page;margin-bottom:28px}.pg:last-of-type{page-break-after:auto;break-after:auto}' +
+      'h1{font-size:20px;margin:0}p.sub{margin:2px 0 8px;font-size:12px;color:#5a6579}' +
+      'table{border-collapse:collapse;width:100%;table-layout:fixed;font-size:11px}' +
+      'th,td{border:1px solid #b8c1d1;padding:1px 2px;text-align:center;line-height:1.15}' +
+      'th.cl{width:62px;text-align:left;padding-left:4px;font-size:12px}' +
+      'thead th{background:#eaeef4}tr.sec th{text-align:left;font-size:12px;padding:3px 6px}tr.sec.j th{color:#2848c8;background:#dfe5fb}tr.sec.p th{color:#0b7d62;background:#d6efe7}' +
+      'tr.tmr th{font-size:9.5px;font-weight:normal;color:#5a6579;background:#fff}' +
+      'td.c{height:23px}td.c b{display:block;font-size:11px}td.c span{display:block;font-size:10px;color:#44506a}td.na{background:#eaeef4}' +
+      '.bk{border-right:2px solid #5a6579}.lk{border-right:3px solid #14213d}' +
+      '.key{font-size:10.5px;margin-top:6px;color:#44506a}@media print{.bar{display:none}body{padding:0}.pg{margin-bottom:0}}';
+    mc.J.concat(mc.P).forEach(function (c) { S.cells[c.id].forEach(function (r) { r.forEach(function (x) { if (x.s) used[x.s] = 1; }); }); });
+    var key = Object.keys(used).sort().map(function (n) { return '<b>' + esc(abbr(n)) + '</b> ' + esc(n); }).join(' &nbsp;&middot;&nbsp; ');
+    var named = S.data.teachers.filter(function (t) { return t.name !== t.id && /^T\d+$/.test(t.id); });
+    var tkey = named.length ? '<div class="key"><b>Teachers:</b> ' + named.map(function (t) { return esc(t.id) + ' ' + esc(t.name); }).join(' &nbsp;&middot;&nbsp; ') + '</div>' : '';
+    var body = '<div class="bar">This is the master timetable for the whole school, one page for each day. To print: press Ctrl+P, choose A3 landscape (or A4 landscape with Fit to page) and print.</div>';
+    for (var d = 0; d < 5; d++) {
+      body += '<section class="pg"><h1>' + esc(S.data.school) + ' – Master timetable</h1><p class="sub">' + FULLDAYS[d] + '. Junior lessons are 40 minutes and primary lessons are 35 minutes. Thick lines mark break and lunch.</p><table><thead><tr><th class="cl">Class</th>';
+      for (var p = 0; p < NP; p++) body += '<th class="' + bk(p).trim() + '">' + (p + 1) + '</th>';
+      body += '</tr></thead><tbody>';
+      [['J', 'Junior school (40 min lessons)', 'j'], ['P', 'Primary school (35 min lessons)', 'p']].forEach(function (g) {
+        var bells = TT.BELLS[g[0]];
+        body += '<tr class="sec ' + g[2] + '"><th colspan="' + (NP + 1) + '">' + g[1] + '</th></tr><tr class="tmr"><th class="cl">Starts</th>';
+        for (var q = 0; q < NP; q++) body += '<th class="' + bk(q).trim() + '">' + (bells[q] ? time(bells[q].s) : '') + '</th>';
+        body += '</tr>';
+        mc[g[0]].forEach(function (c) {
+          body += '<tr><th class="cl">' + esc(plainName(c)) + '</th>';
+          for (var q2 = 0; q2 < NP; q2++) {
+            if (q2 >= bells.length) { body += '<td class="c na' + bk(q2) + '"></td>'; continue; }
+            var x = S.cells[c.id][d][q2];
+            if (!x.s) { body += '<td class="c' + bk(q2) + '">&ndash;</td>'; continue; }
+            body += '<td class="c' + bk(q2) + '" style="background:hsl(' + hue(x.s) + ' 62% 91%)"><b>' + esc(abbr(x.s)) + '</b><span>' + esc(shortName(tm[x.t])) + '</span></td>';
+          }
+          body += '</tr>';
+        });
+      });
+      body += '</tbody></table><div class="key"><b>Subjects:</b> ' + key + '</div>' + tkey + '</section>';
+    }
+    return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Master timetable</title><style>' + css + '</style></head><body>' + body + '</body></html>';
+  }
+
+  function render() {
+    var app = $('#app');
+    var keep = window.scrollY;
+    var mw0 = $('.mtwrap'), msl = mw0 ? mw0.scrollLeft : 0;
+    var h = { gen: genView, view: viewView, teachers: teachersView, lessons: lessonsView, bells: bellsView }[S.view]();
+    app.innerHTML = h;
+    var mw1 = $('.mtwrap'); if (mw1 && msl) mw1.scrollLeft = msl;
+    $('#tabs').innerHTML = VIEWS.map(function (v) { return '<button data-action="nav" data-v="' + v[0] + '"' + (S.view === v[0] ? ' aria-current="page"' : '') + '>' + v[1] + '</button>'; }).join('');
+    renderOverlay();
+  }
+  function renderOverlay() {
+    var o = '';
+    if (S.sheet && S.sheet.kind === 'paste') o += '<div class="sheet" data-action="closesheet"><div><b>Paste from Excel</b><p class="muted small">In Excel, select the cells including the header row and copy them, then paste here. Columns: Teacher, Subject, Class, Lessons. Optional: Name, Days off.</p><textarea class="ed" id="paste-text" placeholder="Teacher&#9;Subject&#9;Class&#9;Lessons">' + esc(S.pasteText) + '</textarea><div class="btnrow"><button class="btn primary" data-action="imp-read">Read it</button><button class="btn" data-action="closesheet">Cancel</button></div></div></div>';
+    else if (S.imp) o += impSheet();
+    else if (S.sheet) o += '<div class="sheet" data-action="closesheet"><div><b>' + esc(S.sheet.title) + '</b><p class="muted small">' + esc(S.sheet.note) + '</p><textarea id="sheet-text" readonly>' + esc(S.sheet.text) + '</textarea><div class="btnrow"><button class="btn primary" data-action="closesheet">Close</button></div></div></div>';
+    if (S.toast) o += '<div class="toast" role="status">' + esc(S.toast) + '</div>';
+    $('#overlay').innerHTML = o;
+    var ta = $('#sheet-text'); if (ta) { ta.focus(); ta.select(); }
+    var pt = $('#paste-text'); if (pt && !pt.value) pt.focus();
+  }
+  function impSheet() {
+    var im = S.imp, p = im.parsed, sm = im.sum, ok = p.assignments.length > 0;
+    var issues = '';
+    p.errors.slice(0, 8).forEach(function (e) { issues += '<div class="issue"><span class="chip bad">' + (e.row ? 'Row ' + e.row : 'Problem') + '</span><span>' + esc(e.msg) + '</span></div>'; });
+    if (p.errors.length > 8) issues += '<div class="issue muted small">and ' + (p.errors.length - 8) + ' more problems.</div>';
+    p.warnings.forEach(function (w) { issues += '<div class="issue"><span class="chip warn">Note</span><span>' + esc(w.msg) + '</span></div>'; });
+    if (p.newClasses.length) issues += '<div class="issue"><span class="chip warn">New</span><span>These classes are not in the app yet and will be added: ' + p.newClasses.map(function (c) { return esc(c.name); }).join(', ') + '.</span></div>';
+    var chk = '';
+    if (ok) {
+      if (sm.over.length) chk += '<div class="issue"><span class="chip bad">Fix</span><span>Too many lessons: ' + sm.over.slice(0, 6).map(function (x) { return esc(x.name) + ' by ' + x.n; }).join(', ') + '. You can still import and fix these in the Lessons tab.</span></div>';
+      var none = sm.under.filter(function (x) { return x.none; }), part = sm.under.filter(function (x) { return !x.none; });
+      if (part.length) chk += '<div class="issue"><span class="chip warn">Note</span><span>Free periods will appear in ' + part.slice(0, 6).map(function (x) { return esc(x.name) + ' (' + x.n + ')'; }).join(', ') + (part.length > 6 ? ' and ' + (part.length - 6) + ' more' : '') + '.</span></div>';
+      if (none.length) chk += '<div class="issue"><span class="chip warn">Note</span><span>No lessons in the sheet for ' + none.slice(0, 6).map(function (x) { return esc(x.name); }).join(', ') + (none.length > 6 ? ' and ' + (none.length - 6) + ' more' : '') + '.</span></div>';
+      if (sm.impossible.length) chk += '<div class="issue"><span class="chip bad">Fix</span><span>These teachers have more lessons than a week has periods, so clashes cannot be avoided: ' + sm.impossible.slice(0, 5).map(function (x) { return esc(x.name) + ' ' + x.n + ' (limit ' + x.room + ')'; }).join(', ') + '. Share some of their lessons with another teacher.</span></div>';
+      if (sm.heavy.length) chk += '<div class="issue"><span class="chip warn">Note</span><span>Above the weekly limit: ' + sm.heavy.slice(0, 5).map(function (x) { return esc(x.name) + ' ' + x.n; }).join(', ') + '.</span></div>';
+      if (!sm.over.length && !sm.under.length) chk += '<div class="issue"><span class="chip ok">OK</span><span>Every class fills its week exactly.</span></div>';
+    }
+    var removed = im.mode === 'replace' ? S.data.teachers.filter(function (t) { return !im.nd.teachers.some(function (x) { return x.id === t.id; }); }).length : 0;
+    var h = '<div class="sheet" data-action="closesheet"><div><h2>Check before importing</h2>';
+    h += '<p class="muted small">' + p.rows + ' row' + (p.rows === 1 ? '' : 's') + ' read' + (p.errors.length ? ', ' + p.errors.filter(function (e) { return e.row; }).length + ' skipped' : '') + '.</p>';
+    if (ok) {
+      h += '<div class="metrics"><div class="metric"><b>' + sm.teachers + '</b><span>teachers</span></div><div class="metric"><b>' + sm.classes + '</b><span>classes</span></div><div class="metric"><b>' + sm.lessons + '</b><span>lessons a week</span></div></div>';
+      h += '<p class="small muted">' + sm.levels.J + ' teach junior only, ' + sm.levels.P + ' primary only and ' + sm.levels.B + ' teach both.</p>';
+      h += '<div class="seg" role="group" aria-label="How to import"><button data-action="imp-mode" data-v="replace" aria-pressed="' + (im.mode === 'replace') + '">Replace all</button><button data-action="imp-mode" data-v="merge" aria-pressed="' + (im.mode === 'merge') + '">Update classes in sheet</button></div>';
+      h += '<p class="small muted">' + (im.mode === 'replace' ? 'All current lessons are replaced by this sheet.' + (removed ? ' ' + removed + ' teacher' + (removed === 1 ? '' : 's') + ' not in the sheet will be removed.' : '') : 'Only the classes in this sheet get new lessons. Other classes and all teachers stay as they are.') + ' The current timetable is cleared, so generate again afterwards.</p>';
+    }
+    if (issues || chk) h += '<div class="issues">' + issues + chk + '</div>';
+    h += '<div class="btnrow"><button class="btn primary" data-action="imp-apply"' + (ok ? '' : ' disabled') + '>Import</button><button class="btn" data-action="imp-cancel">Cancel</button></div></div></div>';
+    return h;
+  }
+  function startImport(text) {
+    var p = Importer.read(text, S.data);
+    S.sheet = null;
+    S.imp = { parsed: p, mode: 'replace' };
+    refreshImp();
+    renderOverlay();
+  }
+  function refreshImp() {
+    var im = S.imp;
+    im.nd = Importer.apply(S.data, im.parsed, im.mode);
+    im.sum = Importer.summarize(im.nd, TT);
+  }
+  function outFile(name, text, title) { if (DL) saveFile(name, text); else copyText(text, title); }
+
+  function toast(msg) {
+    S.toast = msg; renderOverlay();
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { S.toast = ''; renderOverlay(); }, 2600);
+  }
+
+  /* ---------- export ---------- */
+  function csv(rows) {
+    return '﻿' + rows.map(function (r) { return r.map(function (c) { c = String(c == null ? '' : c); return /[",\n]/.test(c) ? '"' + c.replace(/"/g, '""') + '"' : c; }).join(','); }).join('\r\n');
+  }
+  function tsv(rows) { return rows.map(function (r) { return r.join('\t'); }).join('\n'); }
+  function classRows(cid) {
+    var c = cById()[cid], tm = tById(), np = TT.BELLS[c.section].length, rows = [[c.name, 'Time'].concat(TT.DAYS)];
+    for (var p = 0; p < np; p++) {
+      var b = TT.BELLS[c.section][p], r = ['Lesson ' + (p + 1), time(b.s) + '-' + time(b.e)];
+      for (var d = 0; d < 5; d++) { var x = S.cells[cid][d][p]; r.push(x.s ? x.s + (x.t ? ' (' + shortName(tm[x.t]) + ')' : '') : 'Free'); }
+      rows.push(r);
+    }
+    return rows;
+  }
+  function teacherRows(tid) {
+    var t = tById()[tid], cb = cById(), lv = TT.teacherLevels(S.data)[tid], lvl = levelOf(lv);
+    var showJ = lvl !== 'P', showP = lvl !== 'J', n = showJ ? 8 : 7;
+    var rows = [[t.name, 'Time'].concat(TT.DAYS)];
+    for (var i = 0; i < n; i++) {
+      var tm = [];
+      if (showJ && TT.BELLS.J[i]) tm.push((showP ? 'J ' : '') + time(TT.BELLS.J[i].s) + '-' + time(TT.BELLS.J[i].e));
+      if (showP && TT.BELLS.P[i]) tm.push((showJ ? 'P ' : '') + time(TT.BELLS.P[i].s) + '-' + time(TT.BELLS.P[i].e));
+      var r = ['Lesson ' + (i + 1), tm.join(' / ')];
+      for (var d = 0; d < 5; d++) {
+        var cell = [];
+        Object.keys(S.cells).forEach(function (cid) { var x = S.cells[cid][d][i]; if (x && x.t === tid) cell.push(cb[cid].name + ' ' + x.s); });
+        r.push(cell.join(' + '));
+      }
+      rows.push(r);
+    }
+    return rows;
+  }
+  function allClassRows() {
+    var rows = [['Class', 'Day', 'Lesson', 'Start', 'End', 'Subject', 'Teacher']], tm = tById();
+    S.data.classes.forEach(function (c) {
+      for (var d = 0; d < 5; d++) for (var p = 0; p < TT.BELLS[c.section].length; p++) {
+        var x = S.cells[c.id][d][p], b = TT.BELLS[c.section][p];
+        rows.push([c.name, TT.DAYS[d], p + 1, time(b.s), time(b.e), x.s || 'Free', x.t ? tm[x.t].name : '']);
+      }
+    });
+    return rows;
+  }
+  function allTeacherRows() {
+    var rows = [['Teacher', 'Day', 'Lesson', 'Start', 'End', 'Class', 'Subject']], cb = cById(), tm = tById();
+    S.data.classes.forEach(function (c) {
+      for (var d = 0; d < 5; d++) for (var p = 0; p < TT.BELLS[c.section].length; p++) {
+        var x = S.cells[c.id][d][p], b = TT.BELLS[c.section][p];
+        if (x.t) rows.push([tm[x.t].name, TT.DAYS[d], p + 1, time(b.s), time(b.e), c.name, x.s]);
+      }
+    });
+    rows.sort(function (a, b) { return a[0].localeCompare(b[0]) || TT.DAYS.indexOf(a[1]) - TT.DAYS.indexOf(b[1]) || a[3].localeCompare(b[3]); });
+    return rows;
+  }
+  function saveFile(name, text) {
+    if (!DL) return;
+    DL.save({ filename: name, data: text }).then(function () { toast('Saved ' + name); }).catch(function (e) {
+      if (e && e.code === 'declined') return;
+      toast('Could not save the file here. Use Copy instead.');
+    });
+  }
+  function copyText(text, title) {
+    function fallback() { S.sheet = { title: title || 'Copy this text', note: 'Select all and copy, then paste where you need it.', text: text }; renderOverlay(); }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { toast('Copied'); }, fallback);
+      else fallback();
+    } catch (e) { fallback(); }
+  }
+  function currentRows() { return S.vmode === 'class' ? classRows(S.selClass) : S.vmode === 'school' ? masterRows(S.mDay) : teacherRows(S.selTeacher); }
+  function fname(s) { return s.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase(); }
+
+  /* ---------- generation ---------- */
+  function startGen() {
+    if (S.gen.running) return;
+    var ck = checks(); if (ck.blocking) { toast('Fix the classes with too many lessons first'); return; }
+    var solver = new TT.Solver(S.data, (Date.now() % 100000) + 1);
+    var t0 = performance.now();
+    S.gen = { running: true, p: 0, result: null };
+    render();
+    function tick() {
+      var end = performance.now() + 35;
+      while (!solver.done && performance.now() < end) solver.runChunk(4000);
+      S.gen.p = solver.progress();
+      var bar = $('#gen-bar'); if (bar) bar.style.width = Math.round(S.gen.p * 100) + '%';
+      if (!solver.done) { setTimeout(tick, 0); return; }
+      S.cells = solver.result();
+      S.stale = false;
+      var V = TT.validate(S.data, S.cells), tm = tById(), names = {};
+      V.clashes.forEach(function (c) { names[tm[c.t].name] = 1; });
+      V.offHits.forEach(function (c) { names[tm[c.t].name] = 1; });
+      S.gen = { running: false, p: 1, result: { clashes: V.clashes.length + V.offHits.length, names: Object.keys(names).slice(0, 5).join(', '), ms: performance.now() - t0 } };
+      save(); render();
+    }
+    setTimeout(tick, 20);
+  }
+
+  /* ---------- events ---------- */
+  function stepSelect(list, cur, v) {
+    var i = list.indexOf(cur); i = (i + v + list.length) % list.length; return list[i];
+  }
+  function teacherOrder() {
+    var ck = checks(), g = { B: [], J: [], P: [], '-': [] };
+    S.data.teachers.slice().sort(function (a, b) { return a.name.localeCompare(b.name); }).forEach(function (t) { g[levelOf(ck.lv[t.id])].push(t.id); });
+    return g.B.concat(g.J, g.P, g['-']);
+  }
+  document.addEventListener('click', function (ev) {
+    var el = ev.target.closest('[data-action]'); if (!el) return;
+    var a = el.getAttribute('data-action'), v = el.getAttribute('data-v'), id = el.getAttribute('data-id'), i = el.getAttribute('data-i');
+    var d = S.data;
+    if (a === 'closesheet') { if (ev.target.closest('.sheet > div') && el.classList.contains('sheet')) return; S.sheet = null; S.imp = null; renderOverlay(); return; }
+    switch (a) {
+      case 'imp-template': outFile('ngurubani-lessons-template.csv', Importer.template(), 'Copy this and paste it into Excel'); break;
+      case 'imp-export': outFile('ngurubani-lessons.csv', Importer.toCsv(d), 'Copy this and paste it into Excel'); break;
+      case 'imp-paste': S.sheet = { kind: 'paste' }; renderOverlay(); break;
+      case 'imp-read': { var ta = $('#paste-text'); S.pasteText = ta ? ta.value : S.pasteText; startImport(S.pasteText); break; }
+      case 'imp-mode': S.imp.mode = v; refreshImp(); renderOverlay(); break;
+      case 'imp-cancel': S.imp = null; renderOverlay(); break;
+      case 'imp-apply': {
+        if (!S.imp || !S.imp.parsed.assignments.length) return;
+        S.data = S.imp.nd; S.cells = null; S.stale = false; S.sample = false; S.undo = null; S.pick = null;
+        S.gen = { running: false, p: 0, result: null }; S.selClass = S.data.classes[0].id; S.lClass = S.data.classes[0].id; S.selTeacher = null;
+        S.imp = null; S.pasteText = ''; save(); render(); toast('Imported. Now generate the timetable.');
+        break;
+      }
+      case 'nav': S.view = v; S.pick = null; render(); window.scrollTo(0, 0); break;
+      case 'gen': startGen(); break;
+      case 'buf': d.buffer = Math.max(0, Math.min(15, (d.buffer == null ? 5 : d.buffer) + Number(v))); touch(true); $('#buf-out').textContent = d.buffer; break;
+      case 'maxday': d.maxPerDay = Math.max(4, Math.min(8, (d.maxPerDay || 7) + Number(v))); touch(true); $('#md-out').textContent = d.maxPerDay; break;
+      case 'vmode': S.vmode = v; S.pick = null; S.edit = false; render(); break;
+      case 'edit': S.edit = !S.edit; S.pick = null; render(); break;
+      case 'step':
+        if (S.vmode === 'class') S.selClass = stepSelect(d.classes.map(function (c) { return c.id; }), S.selClass, Number(v));
+        else S.selTeacher = stepSelect(teacherOrder(), S.selTeacher, Number(v));
+        S.pick = null; render(); break;
+      case 'lstep': S.lClass = stepSelect(d.classes.map(function (c) { return c.id; }), S.lClass, Number(v)); render(); break;
+      case 'cell': {
+        if (S.vmode !== 'class' || !S.edit) return;
+        var cid = el.getAttribute('data-cls'), dd = Number(el.getAttribute('data-d')), pp = Number(el.getAttribute('data-p'));
+        if (!S.pick) { S.pick = { cls: cid, d: dd, p: pp }; render(); return; }
+        if (S.pick.d === dd && S.pick.p === pp) { S.pick = null; render(); return; }
+        var rows = S.cells[cid], A = S.pick, tmp = rows[A.d][A.p];
+        rows[A.d][A.p] = rows[dd][pp]; rows[dd][pp] = tmp;
+        S.undo = { cls: cid, a: [A.d, A.p], b: [dd, pp] };
+        S.pick = null; save(); render(); toast('Swapped');
+        break;
+      }
+      case 'undo': {
+        if (!S.undo) return; var u = S.undo, r = S.cells[u.cls], t2 = r[u.a[0]][u.a[1]];
+        r[u.a[0]][u.a[1]] = r[u.b[0]][u.b[1]]; r[u.b[0]][u.b[1]] = t2; S.undo = null; save(); render(); toast('Swap undone'); break;
+      }
+      case 'copyview': copyText(tsv(currentRows()), 'Copy this timetable'); break;
+      case 'saveview':
+        if (S.vmode === 'school') saveFile('ngurubani-master-timetable.csv', csv(masterRows('week')));
+        else saveFile('ngurubani-' + fname(currentRows()[0][0]) + '.csv', csv(currentRows()));
+        break;
+      case 'saveprint': saveFile('ngurubani-master-timetable-print.html', masterPrintHtml()); break;
+      case 'mday': S.mDay = v; render(); break;
+      case 'gotoclass': S.vmode = 'class'; S.selClass = el.getAttribute('data-cls'); S.pick = null; S.edit = false; render(); window.scrollTo(0, 0); break;
+      case 'saveclasses': saveFile('ngurubani-all-classes.csv', csv(allClassRows())); break;
+      case 'saveteachers': saveFile('ngurubani-all-teachers.csv', csv(allTeacherRows())); break;
+      case 'backup': saveFile('ngurubani-timetable-backup.json', JSON.stringify({ data: d, cells: S.cells, stale: S.stale, sample: S.sample })); break;
+      case 'backupcopy': copyText(JSON.stringify({ data: d, cells: S.cells, stale: S.stale, sample: S.sample }), 'Backup text'); break;
+      case 'reset':
+        if (el.getAttribute('data-sure')) { S.data = TT.sampleData(); S.cells = null; S.sample = true; S.stale = false; S.gen = { running: false, p: 0, result: null }; save(); render(); toast('Sample data restored'); }
+        else { el.setAttribute('data-sure', '1'); el.textContent = 'Tap again to erase your changes'; }
+        break;
+      case 'tadd': { var nt = { id: uid(), name: 'New teacher', area: '', max: 30, off: [] }; d.teachers.unshift(nt); S.fLevel = 'all'; S.fQ = ''; touch(true); render(); var inp = $('#tn-' + nt.id); if (inp) { inp.focus(); inp.select(); } break; }
+      case 'tdel': d.teachers = d.teachers.filter(function (t) { return t.id !== id; }); touch(true); render(); break;
+      case 'tmax': { var t = tById()[id]; t.max = Math.max(5, Math.min(40, (t.max || 30) + Number(v))); touch(false); render(); break; }
+      case 'toff': { var t3 = tById()[id], k = Number(el.getAttribute('data-d')); t3.off = t3.off || []; var ix = t3.off.indexOf(k); if (ix >= 0) t3.off.splice(ix, 1); else t3.off.push(k); touch(true); render(); break; }
+      case 'lless': { var as = d.assignments[Number(i)]; as.lessons = Math.max(1, Math.min(10, as.lessons + Number(v))); touch(true); render(); break; }
+      case 'ldel': d.assignments.splice(Number(i), 1); touch(true); render(); break;
+      case 'ladd': d.assignments.push({ cls: S.lClass, subject: 'New subject', teacher: null, lessons: 1 }); touch(true); render(); var ni = $('#ls-' + (d.assignments.length - 1)); if (ni) { ni.focus(); ni.select(); } break;
+    }
+  });
+  document.addEventListener('change', function (ev) {
+    var el = ev.target, d = S.data;
+    if (el.id === 'hl-teacher') { S.hl = el.value; render(); return; }
+    if (el.id === 'sel-class') { S.selClass = el.value; S.pick = null; render(); return; }
+    if (el.id === 'sel-teacher') { S.selTeacher = el.value; render(); return; }
+    if (el.id === 'sel-lclass') { S.lClass = el.value; render(); return; }
+    if (el.id === 'f-level') { S.fLevel = el.value; render(); return; }
+    if (el.getAttribute('data-bind') === 'lteach') { d.assignments[Number(el.getAttribute('data-i'))].teacher = el.value || null; touch(true); render(); return; }
+    if (el.id === 'imp-file') {
+      var f0 = el.files && el.files[0]; if (!f0) return;
+      if (/\.xlsx?$/i.test(f0.name)) { toast('In Excel choose File, Save As, then CSV, and pick that file.'); el.value = ''; return; }
+      var fr0 = new FileReader();
+      fr0.onload = function () { startImport(String(fr0.result)); };
+      fr0.onerror = function () { toast('Could not read that file'); };
+      fr0.readAsText(f0); el.value = ''; return;
+    }
+    if (el.id === 'restore-file') {
+      var f = el.files && el.files[0]; if (!f) return;
+      var fr = new FileReader();
+      fr.onload = function () {
+        try {
+          var o = JSON.parse(fr.result);
+          if (!o.data || !o.data.classes || !o.data.teachers || !o.data.assignments) throw new Error('bad');
+          S.data = o.data; S.cells = o.cells || null; S.stale = !!o.stale; S.sample = !!o.sample; S.gen = { running: false, p: 0, result: null };
+          save(); render(); toast('Backup restored');
+        } catch (e) { toast('That file is not a timetable backup'); }
+      };
+      fr.readAsText(f);
+    }
+  });
+  document.addEventListener('input', function (ev) {
+    var el = ev.target, b = el.getAttribute && el.getAttribute('data-bind'), d = S.data;
+    if (el.id === 'paste-text') { S.pasteText = el.value; return; }
+    if (el.id === 'f-q') { S.fQ = el.value; var pos = el.selectionStart; render(); var n = $('#f-q'); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (e) { } } return; }
+    if (!b) return;
+    var id = el.getAttribute('data-id');
+    if (b === 'tname') { tById()[id].name = el.value; touch(false); }
+    else if (b === 'tarea') { tById()[id].area = el.value; touch(false); }
+    else if (b === 'cname') { var cc = cById()[id]; cc.name = el.value; cc.short = makeShort(el.value); touch(false); }
+    else if (b === 'lsubj') { d.assignments[Number(el.getAttribute('data-i'))].subject = el.value; touch(true); }
+  });
+
+  /* ---------- boot ---------- */
+  load();
+  S.selClass = S.data.classes[0].id; S.lClass = S.data.classes[0].id;
+  if (S.cells) S.gen.result = null;
+  render();
+  try {
+    if (window.claude && window.claude.use) {
+      window.claude.use('downloads').then(function (d) {
+        DL = d || null;
+        var ae = document.activeElement;
+        if (DL && !(ae && /INPUT|TEXTAREA|SELECT/.test(ae.tagName))) render();
+      }, function () { });
+    }
+  } catch (e) { }
+})();
+</script>
+<script>
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+  window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
+}
+</script>
+</body>
+</html>
