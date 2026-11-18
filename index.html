@@ -161,8 +161,8 @@ select.inp { padding-right: 6px; }
 
 .tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--surface); border-top: 1px solid var(--line); padding-top: 6px;
   padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px)); padding-left: max(8px, env(safe-area-inset-left, 0px)); padding-right: max(8px, env(safe-area-inset-right, 0px)); }
-.tabs nav { max-width: 920px; margin: 0 auto; display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
-.tabs button { border: 0; background: transparent; padding: 8px 2px; border-radius: 10px; font-size: 12.5px; font-weight: 600; color: var(--muted); min-height: 44px; }
+.tabs nav { max-width: 920px; margin: 0 auto; display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; }
+.tabs button { border: 0; background: transparent; padding: 8px 0; border-radius: 10px; font-size: 12px; font-weight: 600; color: var(--muted); min-height: 44px; }
 .tabs button[aria-current="page"] { background: var(--junior-soft); color: var(--junior); }
 
 .tcard { display: flex; flex-direction: column; gap: 8px; padding: 12px 0; border-top: 1px solid var(--line); }
@@ -224,6 +224,13 @@ label.btn { display: inline-flex; align-items: center; }
 .mt .lk { border-right: 3px solid var(--ink); }
 .mt .cn { border: 0; background: none; font: inherit; font-weight: 700; padding: 6px 8px; width: 100%; text-align: left; min-height: 40px; color: var(--ink); }
 .mt thead th.dh { font-family: var(--font-display); font-size: 13px; border-right: 3px solid var(--ink); }
+.banner.ok { background: var(--primary-soft); color: var(--ok); }
+.cta { gap: 10px; }
+.cta .btn.big { font-size: 17px; }
+.days.pick button[aria-pressed="true"] { background: var(--junior-soft); border-color: var(--junior); color: var(--junior); }
+.days.pick button { min-width: 38px; }
+.mt tr.tmr th.sub { font-weight: 500; }
+.mt thead tr.tmr th { background: var(--surface); }
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(76px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg); padding: 9px 14px; border-radius: 10px; font-size: 13.5px; z-index: 50; max-width: calc(100% - 32px); }
 details summary { cursor: pointer; font-weight: 600; min-height: 36px; display: flex; align-items: center; }
 @media (prefers-reduced-motion: reduce) { .progress i { transition: none; } }
@@ -712,8 +719,8 @@ if (typeof module !== 'undefined') module.exports = TT;
 <script>
 /* ===== Lesson importer (no DOM): reads a CSV / pasted Excel sheet ===== */
 var Importer = (function () {
-  var DAYN = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
-  var DAYK = ['mon', 'tue', 'wed', 'thu', 'fri'];
+  var DAYN = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  var DAYK = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 
   function nk(s) { return String(s == null ? '' : s).toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]/g, ''); }
   function ckey(s) { return nk(String(s == null ? '' : s).replace(/grade|class|std|form/ig, '')); }
@@ -1000,6 +1007,368 @@ if (typeof module !== 'undefined') module.exports = Importer;
 
 </script>
 <script>
+/* ===== ESP (remedial lessons) roster engine (no DOM) ===== */
+var ESP = (function () {
+  var TTm = (typeof TT !== 'undefined') ? TT : (typeof require !== 'undefined' ? require('./solver.js') : null);
+  var DAYN6 = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  var PER_CLASS = 6; // one session every weekday plus one on Saturday
+
+  function defaults() {
+    return { grades: [4, 5, 6, 7, 8, 9], morning: { s: 420, e: 470 }, evening: { s: 960, e: 1020 },
+      sat: [{ s: 420, e: 540 }, { s: 570, e: 660 }, { s: 690, e: 780 }],
+      extra: { J: ['Mathematics', 'English'], P: ['Mathematics', 'English'] }, skip: ['Pastoral Instruction'] };
+  }
+  // bring an older saved config up to date (2 Saturday slots, rotation stepper)
+  function migrate(cfg) {
+    var d = defaults(); cfg = cfg || {};
+    if (!cfg.grades) cfg.grades = d.grades;
+    if (!cfg.morning) cfg.morning = d.morning;
+    if (!cfg.evening) cfg.evening = d.evening;
+    if (!cfg.sat || cfg.sat.length !== 3) cfg.sat = d.sat;
+    if (!cfg.extra) cfg.extra = d.extra;
+    if (!cfg.extra.J) cfg.extra.J = d.extra.J;
+    if (!cfg.extra.P) cfg.extra.P = d.extra.P;
+    if (!cfg.skip) cfg.skip = d.skip;
+    delete cfg.rotation;
+    return cfg;
+  }
+  function gradeOf(c) {
+    if (c.grade) return c.grade;
+    var m = /(\d+)/.exec(c.name || ''); return m ? parseInt(m[1], 10) : 0;
+  }
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      var t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  // 13 session slots: Mon..Fri morning/evening (index day*2+k), then Saturday 1, 2, 3 (index 10+k)
+  function slots(cfg) {
+    var out = [], d, k, t;
+    for (d = 0; d < 5; d++) for (k = 0; k < 2; k++) {
+      t = k ? cfg.evening : cfg.morning;
+      out.push({ i: d * 2 + k, d: d, k: k, kind: k ? 'E' : 'M', name: k ? 'Evening' : 'Morning', s: t.s, e: t.e });
+    }
+    for (k = 0; k < 3; k++) out.push({ i: 10 + k, d: 5, k: k, kind: 'S' + (k + 1), name: 'Saturday ' + (k + 1), s: cfg.sat[k].s, e: cfg.sat[k].e });
+    return out;
+  }
+
+  // the class's subjects (core first) as a ring, with the teacher of each
+  function ringOf(data, cls, noTeacher) {
+    var by = {}, order = [], skip = (data.esp && data.esp.skip) || [];
+    data.assignments.forEach(function (a) {
+      if (a.cls !== cls.id || skip.indexOf(a.subject) >= 0) return;
+      var e = by[a.subject];
+      if (!e) { e = by[a.subject] = { subject: a.subject, teacher: a.teacher || null, lessons: a.lessons }; order.push(a.subject); }
+      else if (a.teacher && (!e.teacher || a.lessons > e.lessons)) { e.teacher = a.teacher; e.lessons = a.lessons; }
+    });
+    var core = [], rest = [];
+    order.forEach(function (s) {
+      if (!by[s].teacher) { if (noTeacher) noTeacher.push({ cls: cls.id, subject: s }); return; }
+      (TTm.CORE.indexOf(s) >= 0 ? core : rest).push(by[s]);
+    });
+    return core.concat(rest);
+  }
+
+  function classPen(sl) {
+    var m = 0;
+    for (var i = 0; i < 5; i++) if (sl[i] === 0) m++;
+    return m < 2 ? 2 - m : m > 3 ? m - 3 : 0;
+  }
+
+  // ---- Saturday planning: every Saturday teacher takes exactly 3 sessions (one per slot), each with a different class ----
+  // cand[ci] = list of teacher indexes who can take class ci on Saturday. Returns {group: [[t,[c,c,c]]...], skipped:[ci]}
+  function exactCover(nC, cand, rng, skipAllow, nodeCap) {
+    var tCl = {}, ci, k;
+    for (ci = 0; ci < nC; ci++) cand[ci].forEach(function (t) { (tCl[t] = tCl[t] || []).push(ci); });
+    var assigned = new Int8Array(nC), usedT = {}, groups = [], skipped = [], nodes = 0, best = null;
+    function opts(c) {
+      var out = [];
+      cand[c].forEach(function (t) {
+        if (usedT[t]) return;
+        var free = tCl[t].filter(function (x) { return !assigned[x] && x !== c; });
+        if (free.length >= 2) out.push(t);
+      });
+      return out;
+    }
+    function shuffle(a) { for (var i = a.length - 1; i > 0; i--) { var j = (rng() * (i + 1)) | 0, x = a[i]; a[i] = a[j]; a[j] = x; } return a; }
+    function dfs(skips) {
+      if (++nodes > nodeCap) return false;
+      var pick = -1, po = null, pn = 1e9, c;
+      for (c = 0; c < nC; c++) {
+        if (assigned[c]) continue;
+        var o = opts(c);
+        if (o.length < pn || (o.length === pn && rng() < 0.3)) { pn = o.length; pick = c; po = o; }
+        if (pn === 0) break;
+      }
+      if (pick < 0) return true;
+      shuffle(po);
+      for (var oi = 0; oi < po.length; oi++) {
+        var t = po[oi], free = shuffle(tCl[t].filter(function (x) { return !assigned[x] && x !== pick; }));
+        var tries = 0;
+        for (var i = 0; i < free.length && tries < 12; i++) for (var j = i + 1; j < free.length && tries < 12; j++) {
+          tries++;
+          assigned[pick] = assigned[free[i]] = assigned[free[j]] = 1; usedT[t] = 1; groups.push([t, [pick, free[i], free[j]]]);
+          if (dfs(skips)) return true;
+          groups.pop(); usedT[t] = 0; assigned[pick] = assigned[free[i]] = assigned[free[j]] = 0;
+          if (nodes > nodeCap) return false;
+        }
+      }
+      if (skips > 0 && skipped.length < skipAllow) {
+        assigned[pick] = 2; skipped.push(pick);
+        if (dfs(skips - 1)) return true;
+        skipped.pop(); assigned[pick] = 0;
+      }
+      return false;
+    }
+    var ok = dfs(skipAllow);
+    return ok ? { groups: groups.slice(), skipped: skipped.slice() } : null;
+  }
+
+  // The class's 10 morning and 10 evening sessions over the two weeks.
+  // Each learning area gets one morning and one evening; the extra sessions go to the areas agreed for the term.
+  function twoWeekPlan(ring, extras, shift) {
+    var M = [], E = [], n = ring.length, i;
+    if (!n) return null;
+    function byName(nm) { for (var j = 0; j < n; j++) if (ring[j].subject === nm) return ring[j]; return null; }
+    var ex = (extras || []).map(byName).filter(Boolean);
+    if (!ex.length) ex = ring.slice(0, 2);
+    var sh = (shift || 0) % n, sh2 = ((shift || 0) * 3 + 4) % n;
+    for (i = 0; i < Math.min(n, 10); i++) { M.push(ring[(i + sh) % n]); E.push(ring[(i + sh2) % n]); }
+    var e = 0; while (M.length < 10) M.push(ex[e++ % ex.length]);
+    e = 1 % ex.length; while (E.length < 10) E.push(ex[e++ % ex.length]);
+    return { M: M, E: E };
+  }
+
+  // Both weeks are solved together so the sessions can move between weeks. Cell index P = week*10 + day*2 + (0 morning, 1 evening)
+  function Solver(data, opts) {
+    opts = opts || {};
+    var self = this, cfg = data.esp = migrate(data.esp);
+    this.data = data; this.cfg = cfg; this.rng = mulberry32(opts.seed || 11);
+    var tIdx = {};
+    data.teachers.forEach(function (t, i) { tIdx[t.id] = i; });
+    this.tIds = data.teachers.map(function (t) { return t.id; });
+    var T = this.T = data.teachers.length;
+    this.off = new Uint8Array(T * 6); this.heavy = new Uint8Array(T * 6);
+    data.teachers.forEach(function (t, i) { (t.off || []).forEach(function (d) { if (d >= 0 && d < 6) self.off[i * 6 + d] = 1; }); });
+    if (opts.cells) {
+      var maxd = data.maxPerDay || 7, cnt = new Uint8Array(T * 5), q;
+      Object.keys(opts.cells).forEach(function (cid) {
+        opts.cells[cid].forEach(function (row, d) {
+          row.forEach(function (x) { if (x && x.t != null && tIdx[x.t] != null) cnt[tIdx[x.t] * 5 + d]++; });
+        });
+      });
+      for (q = 0; q < T * 5; q++) if (cnt[q] >= maxd) self.heavy[Math.floor(q / 5) * 6 + q % 5] = 1;
+    }
+    this.noTeacher = [];
+    this.cl = data.classes.filter(function (c) { return (cfg.grades || []).indexOf(gradeOf(c)) >= 0; });
+    var rings = this.cl.map(function (c) { return ringOf(data, c, self.noTeacher); });
+    var nC = this.cl.length, ci, i, rng = this.rng;
+    var tOf = function (e) { return e.teacher && tIdx[e.teacher] != null ? tIdx[e.teacher] : -1; };
+
+    // ---- Saturday plan for each week: exact cover, 3 classes per teacher ----
+    var cand = [];
+    rings.forEach(function (ring) {
+      var c2 = [];
+      ring.forEach(function (e) { var t = tOf(e); if (t >= 0 && !self.off[t * 6 + 5] && c2.indexOf(t) < 0) c2.push(t); });
+      cand.push(c2);
+    });
+    function shuffle3(r) { var a = [0, 1, 2]; for (var x = 2; x > 0; x--) { var y = (r() * (x + 1)) | 0, z = a[x]; a[x] = a[y]; a[y] = z; } return a; }
+    function planSat(week) {
+      var plan = null, a2, attempts = [], r2;
+      for (a2 = nC % 3; a2 <= nC; a2 += 3) attempts.push(a2);
+      for (var ai = 0; ai < attempts.length && !plan; ai++)
+        for (var rep = 0; rep < 4 && !plan; rep++) plan = exactCover(nC, cand, rng, attempts[ai], 60000);
+      if (!plan) plan = { groups: [], skipped: [] };
+      var satT = new Int32Array(nC).fill(-1), satK = new Int32Array(nC).fill(-1), satRing = new Int32Array(nC).fill(-1), broken = [], satOcc = {};
+      function ringFor(c, t) {
+        var ring = rings[c], m = [], j;
+        for (j = 0; j < ring.length; j++) if (tOf(ring[j]) === t) m.push(j);
+        return m.length ? m[(week + c) % m.length] : -1;
+      }
+      plan.groups.forEach(function (g) {
+        var t = g[0], order = shuffle3(rng);
+        satOcc[t] = [1, 1, 1];
+        g[1].forEach(function (c, gi) { satT[c] = t; satK[c] = order[gi]; satRing[c] = ringFor(c, t); });
+      });
+      for (var c = 0; c < nC; c++) {
+        if (satT[c] >= 0 || !rings[c].length) continue;
+        var placed = false, cands = cand[c].slice();
+        for (var x = 0; x < cands.length && !placed; x++) {
+          var t = cands[x], u = satOcc[t] || (satOcc[t] = [0, 0, 0]);
+          for (var k = 0; k < 3; k++) if (!u[k]) { u[k] = 1; satT[c] = t; satK[c] = k; satRing[c] = ringFor(c, t); placed = true; break; }
+        }
+        broken.push(self.cl[c].id);
+        if (!placed) { satT[c] = -1; satK[c] = 0; satRing[c] = -1; }
+      }
+      var out = [];
+      for (c = 0; c < nC; c++) out.push(satRing[c] >= 0 ? { subject: rings[c][satRing[c]].subject, teacher: rings[c][satRing[c]].teacher, k: satK[c] } : null);
+      return { sat: out, broken: broken };
+    }
+    var sp = [planSat(0), planSat(1)];
+    this.sat = [sp[0].sat, sp[1].sat]; this.satBroken = [sp[0].broken, sp[1].broken];
+
+    // ---- weekday state: 20 cells per class ----
+    this.sub = []; this.tid = []; this.active = [];
+    this.cl.forEach(function (c, ci) {
+      var ring = rings[ci], pl = twoWeekPlan(ring, cfg.extra[c.section === 'J' ? 'J' : 'P'], ci * 2);
+      if (!pl) { self.sub.push([]); self.tid.push([]); return; }
+      var list = new Array(20), d, w;
+      for (w = 0; w < 2; w++) for (d = 0; d < 5; d++) {
+        list[w * 10 + d * 2] = pl.M[w * 5 + (d + ci) % 5];
+        list[w * 10 + d * 2 + 1] = pl.E[w * 5 + (d + ci + 2) % 5];
+      }
+      self.sub.push(list);
+      self.tid.push(list.map(function (x) { return tOf(x); }));
+      self.active.push(ci);
+    });
+    this.occ = new Uint8Array(T * 20);
+    this.active.forEach(function (ci) {
+      for (var p = 0; p < 20; p++) { var t = self.tid[ci][p]; if (t >= 0) self.occ[t * 20 + p]++; }
+    });
+    this.recompute();
+    this.total = 600000; this.T0 = 3; this.T1 = 0.1; this.maxRounds = 4;
+    this.it = 0; this.round = 0; this.done = this.active.length === 0;
+    this.t4 = new Int32Array(4); this.d4 = new Int32Array(4);
+  }
+
+  // teacher t, week w, day d
+  Solver.prototype.tdEval = function (t, w, d) {
+    var o = this.occ, b = t * 20 + w * 10 + d * 2, o0 = o[b], o1 = o[b + 1], tot = o0 + o1;
+    var hard = (o0 > 1 ? o0 - 1 : 0) + (o1 > 1 ? o1 - 1 : 0);
+    if (this.off[t * 6 + d]) hard += tot;
+    var soft = tot > 1 ? 1 : 0;
+    if (this.heavy[t * 6 + d]) soft += tot;
+    this.eH += hard; this.eS += soft;
+  };
+  // same learning area in the morning and the evening of one day
+  Solver.prototype.dayDup = function (ci, wd) { var s = this.sub[ci]; return s[wd * 2].subject === s[wd * 2 + 1].subject ? 3 : 0; };
+  Solver.prototype.recompute = function () {
+    this.eH = 0; this.eS = 0;
+    var t, w, d, a;
+    for (t = 0; t < this.T; t++) for (w = 0; w < 2; w++) for (d = 0; d < 5; d++) this.tdEval(t, w, d);
+    for (a = 0; a < this.active.length; a++) for (d = 0; d < 10; d++) this.eS += this.dayDup(this.active[a], d);
+    this.hard = this.eH; this.soft = this.eS;
+  };
+  Solver.prototype.swapPos = function (ci, p, q) {
+    var tid = this.tid[ci], ta = tid[p], tb = tid[q], o = this.occ;
+    if (ta >= 0) { o[ta * 20 + p]--; o[ta * 20 + q]++; }
+    if (tb >= 0) { o[tb * 20 + q]--; o[tb * 20 + p]++; }
+    var x = this.sub[ci][p]; this.sub[ci][p] = this.sub[ci][q]; this.sub[ci][q] = x;
+    tid[p] = tb; tid[q] = ta;
+  };
+  Solver.prototype.step = function (iters, Temp) {
+    var rng = this.rng, A = this.active, W = 20, t4 = this.t4, d4 = this.d4;
+    for (var it = 0; it < iters; it++) {
+      var ci = A[(rng() * A.length) | 0], n = 0, j, k, dup;
+      // morning cells swap with morning cells, evening with evening (any day, either week)
+      var p = (rng() * 20) | 0, q = (((rng() * 10) | 0) << 1) | (p & 1);
+      if (p === q) continue;
+      var ta = this.tid[ci][p], tb = this.tid[ci][q], wp = p >> 1, wq = q >> 1; // wp = week*5+day
+      if (ta === tb && this.sub[ci][p].subject === this.sub[ci][q].subject) continue;
+      var cand = [ta, wp, ta, wq, tb, wp, tb, wq];
+      for (k = 0; k < 4; k++) {
+        var tt = cand[k * 2], dd = cand[k * 2 + 1];
+        if (tt < 0) continue;
+        dup = false;
+        for (j = 0; j < n; j++) if (t4[j] === tt && d4[j] === dd) { dup = true; break; }
+        if (!dup) { t4[n] = tt; d4[n] = dd; n++; }
+      }
+      this.eH = 0; this.eS = 0;
+      for (k = 0; k < n; k++) this.tdEval(t4[k], d4[k] >= 5 ? 1 : 0, d4[k] % 5);
+      var h0 = this.eH, s0 = this.eS + this.dayDup(ci, wp) + (wq !== wp ? this.dayDup(ci, wq) : 0);
+      this.swapPos(ci, p, q);
+      this.eH = 0; this.eS = 0;
+      for (k = 0; k < n; k++) this.tdEval(t4[k], d4[k] >= 5 ? 1 : 0, d4[k] % 5);
+      var dh = this.eH - h0, ds = this.eS + this.dayDup(ci, wp) + (wq !== wp ? this.dayDup(ci, wq) : 0) - s0, delta = W * dh + ds;
+      if (delta <= 0 || rng() < Math.exp(-delta / Temp)) { this.hard += dh; this.soft += ds; }
+      else this.swapPos(ci, p, q);
+    }
+  };
+  Solver.prototype.runChunk = function (n) {
+    if (this.done) return;
+    var frac = Math.min(1, this.it / this.total);
+    this.step(n, this.T0 * Math.pow(this.T1 / this.T0, frac));
+    this.it += n;
+    if (this.it >= this.total) {
+      if (this.hard > 0 && this.round < this.maxRounds) { this.round++; this.it = 0; this.T0 = Math.max(1.5, this.T0 * 0.7); }
+      else this.done = true;
+    }
+  };
+  Solver.prototype.progress = function () {
+    if (this.done) return 1;
+    return Math.min(1, (this.round + Math.min(1, this.it / this.total)) / (this.maxRounds + 1));
+  };
+  // returns { weeks: [roster1, roster2], loads: [..], satBroken: [[..],[..]], ... }
+  Solver.prototype.result = function () {
+    var self = this, sl = slots(this.cfg), weeks = [{}, {}], loads = [{}, {}];
+    this.cl.forEach(function (c, ci) {
+      for (var w = 0; w < 2; w++) {
+        var list = [], p;
+        for (p = 0; p < 10 && self.sub[ci].length; p++) {
+          var P = w * 10 + p, ti = self.tid[ci][P], id = ti >= 0 ? self.tIds[ti] : null;
+          list.push({ d: p >> 1, k: p & 1, inst: p, kind: sl[p].kind, subject: self.sub[ci][P].subject, teacher: id });
+          if (id) loads[w][id] = (loads[w][id] || 0) + 1;
+        }
+        var s = self.sat[w][ci];
+        if (s) { list.push({ d: 5, k: s.k, inst: 10 + s.k, kind: 'S' + (s.k + 1), subject: s.subject, teacher: s.teacher }); if (s.teacher) loads[w][s.teacher] = (loads[w][s.teacher] || 0) + 1; }
+        weeks[w][c.id] = list;
+      }
+    });
+    this.recompute();
+    return { weeks: weeks, hard: this.hard, soft: this.soft, loads: loads, noTeacher: this.noTeacher, classes: this.cl.length,
+      active: this.active.length, satBroken: this.satBroken.map(function (x) { return x.slice(); }) };
+  };
+
+  // independent checker for one week's roster
+  function validate(data, roster) {
+    var occ = {}, off = {}, clashes = [], offHits = [], sat = {}, satBad = [];
+    data.teachers.forEach(function (t) { off[t.id] = t.off || []; });
+    Object.keys(roster).forEach(function (cid) {
+      roster[cid].forEach(function (s) {
+        if (!s.teacher) return;
+        var key = s.teacher + '|' + s.inst;
+        (occ[key] = occ[key] || []).push(cid);
+        if ((off[s.teacher] || []).indexOf(s.d) >= 0) offHits.push({ teacher: s.teacher, cls: cid, d: s.d });
+        if (s.d === 5) (sat[s.teacher] = sat[s.teacher] || []).push({ cls: cid, k: s.k });
+      });
+    });
+    Object.keys(occ).forEach(function (k) { if (occ[k].length > 1) clashes.push({ key: k, classes: occ[k] }); });
+    Object.keys(sat).forEach(function (t) {
+      var l = sat[t], ks = {}, cs = {};
+      l.forEach(function (x) { ks[x.k] = 1; cs[x.cls] = 1; });
+      if (l.length !== 3 || Object.keys(ks).length !== 3 || Object.keys(cs).length !== 3) satBad.push({ teacher: t, sessions: l.length });
+    });
+    return { clashes: clashes, offHits: offHits, satBad: satBad, satTeachers: Object.keys(sat).length };
+  }
+
+  // weeks = [roster week 1, roster week 2]
+  function rows(data, weeks, fmt) {
+    var cfg = migrate(data.esp), sl = slots(cfg), cm = {}, tm = {};
+    data.classes.forEach(function (c) { cm[c.id] = c; });
+    data.teachers.forEach(function (t) { tm[t.id] = t; });
+    var out = [['Week', 'Class', 'Day', 'Session', 'Start', 'End', 'Subject', 'Teacher']];
+    [0, 1].forEach(function (w) {
+      var roster = weeks[w] || {};
+      data.classes.slice().sort(function (a, b) { return a.section === b.section ? gradeOf(a) - gradeOf(b) : (a.section === 'J' ? -1 : 1); }).forEach(function (c) {
+        (roster[c.id] || []).forEach(function (s) {
+          var x = sl[s.inst];
+          out.push(['Week ' + (w + 1), c.name, DAYN6[s.d], x.name, fmt(x.s), fmt(x.e), s.subject, s.teacher ? (tm[s.teacher] ? tm[s.teacher].name : s.teacher) : '']);
+        });
+      });
+    });
+    return out;
+  }
+
+  return { twoWeekPlan: twoWeekPlan, ringOf: ringOf, defaults: defaults, migrate: migrate, slots: slots, Solver: Solver, validate: validate, rows: rows, gradeOf: gradeOf, DAYN6: DAYN6 };
+})();
+if (typeof module !== 'undefined') module.exports = ESP;
+
+</script>
+<script>
 (function () {
   'use strict';
   var STORE = 'ngurubani-timetable-v2';
@@ -1010,7 +1379,7 @@ if (typeof module !== 'undefined') module.exports = Importer;
   var ABBR_KEYS = Object.keys(ABBR);
 
   var S = { data: null, cells: null, stale: false, sample: true, view: 'gen', vmode: 'class', selClass: null, selTeacher: null,
-    lClass: null, edit: false, pick: null, undo: null, fLevel: 'all', fQ: '', gen: { running: false, p: 0, result: null }, sheet: null, imp: null, pasteText: '', toast: '', mDay: '0', hl: '' };
+    lClass: null, edit: false, pick: null, undo: null, fLevel: 'all', fQ: '', gen: { running: false, p: 0, result: null }, sheet: null, imp: null, pasteText: '', toast: '', mDay: '0', hl: '', esp: { weeks: null, stale: false, res: null }, espRun: { running: false, p: 0 }, espW: 0 };
   (function () { var wd = new Date().getDay(); S.mDay = wd >= 1 && wd <= 5 ? String(wd - 1) : '0'; })();
   var DL = null;
   DL = { save: function (o) {
@@ -1035,15 +1404,15 @@ if (typeof module !== 'undefined') module.exports = Importer;
       var raw = localStorage.getItem(STORE);
       if (raw) {
         var o = JSON.parse(raw);
-        if (o && o.data && o.data.classes) { S.data = o.data; S.cells = o.cells || null; S.stale = !!o.stale; S.sample = !!o.sample; return; }
+        if (o && o.data && o.data.classes) { S.data = o.data; S.cells = o.cells || null; S.stale = !!o.stale; S.sample = !!o.sample; if (o.esp && o.esp.weeks !== undefined) S.esp = o.esp; ensureEsp(); return; }
       }
     } catch (e) { }
-    S.data = TT.sampleData(); S.cells = null; S.sample = true; S.stale = false;
+    S.data = TT.sampleData(); S.cells = null; S.sample = true; S.stale = false; ensureEsp();
   }
   function save() {
-    try { localStorage.setItem(STORE, JSON.stringify({ data: S.data, cells: S.cells, stale: S.stale, sample: S.sample })); } catch (e) { }
+    try { localStorage.setItem(STORE, JSON.stringify({ data: S.data, cells: S.cells, stale: S.stale, sample: S.sample, esp: S.esp })); } catch (e) { }
   }
-  function touch(staleIt) { S.sample = false; if (staleIt && S.cells) S.stale = true; save(); }
+  function touch(staleIt) { S.sample = false; if (staleIt && S.cells) S.stale = true; if (staleIt && S.esp && S.esp.weeks) S.esp.stale = true; save(); }
 
   /* ---------- helpers ---------- */
   function abbr(s) {
@@ -1108,11 +1477,22 @@ if (typeof module !== 'undefined') module.exports = Importer;
     return '<div class="daybar">' + row('J', 'Junior 40 min', 'j') + row('P', 'Primary 35 min', 'p') + '<div class="axis">' + ticks + '</div></div>';
   }
 
+  function genButton(ck) {
+    var label = S.gen.running ? 'Working\u2026' : (S.cells && !S.stale ? 'Generate a new whole-school timetable' : 'Generate whole-school timetable');
+    var h = '<button class="btn primary big" id="gen-btn" data-action="gen"' + (S.gen.running || ck.blocking ? ' disabled' : '') + '>' + label + '</button>';
+    if (S.gen.running) h += '<div class="progress" role="progressbar" aria-label="Generating" aria-valuemin="0" aria-valuemax="100"><i id="gen-bar" style="width:' + Math.round(S.gen.p * 100) + '%"></i></div><p class="small muted">Placing every lesson for all ' + S.data.classes.length + ' classes. This takes a few seconds.</p>';
+    if (ck.blocking) h += '<p class="small" style="color:var(--bad)">Some classes have more lessons than periods. Fix them in the Lessons tab first.</p>';
+    else if (S.data.esp && S.data.esp.grades.length && !S.gen.running) h += '<p class="small muted">Also makes the ESP remedial roster for ' + esc(gradesText(S.data.esp)) + '.</p>';
+    return h;
+  }
   function genView() {
     var d = S.data, ck = checks(), r = S.gen.result;
     var nJ = d.classes.filter(function (c) { return c.section === 'J'; }).length, nP = d.classes.length - nJ;
     var h = '<section class="hero"><p class="eyebrow">Weekly timetable</p><h1>' + esc(d.school) + '</h1>' +
       '<p class="muted">' + nJ + ' junior classes and ' + nP + ' primary classes share ' + d.teachers.length + ' teachers across one Monday to Friday week.</p>' + dayBar() + '</section>';
+
+    h += '<section class="card cta">' + genButton(ck) +
+      (S.cells && !S.gen.running ? '<button class="btn" data-action="open-master">Open the current timetable</button>' : '') + '</section>';
 
     if (S.sample) h += '<div class="banner warn"><span>You are looking at sample teachers and lessons. Import your own from Excel, or edit them by hand.</span><button class="btn sm" data-action="nav" data-v="lessons">Import lessons</button></div>';
     if (S.stale) h += '<div class="banner warn"><span>Lessons or teachers changed after this timetable was made. Generate again to update it.</span></div>';
@@ -1138,11 +1518,9 @@ if (typeof module !== 'undefined') module.exports = Importer;
       '<div class="stepper"><button data-action="maxday" data-v="-1" aria-label="Fewer lessons a day">&minus;</button><output id="md-out">' + (d.maxPerDay || 7) + '</output><button data-action="maxday" data-v="1" aria-label="More lessons a day">+</button></div></div>' +
       '<p class="muted small">Always enforced: no teacher in two places at once, no class with two lessons at once, and teachers marked off on a day get no lessons that day. Avoided where possible: the same subject twice in a day, and core subjects in the last two periods.</p></section>';
 
-    // generate
-    h += '<section class="card"><header><h2>Make the timetable</h2></header>';
-    h += '<button class="btn primary big" id="gen-btn" data-action="gen"' + (S.gen.running || ck.blocking ? ' disabled' : '') + '>' + (S.gen.running ? 'Working…' : (S.cells ? 'Generate a new timetable' : 'Generate timetable')) + '</button>';
-    if (S.gen.running) h += '<div class="progress" role="progressbar" aria-label="Generating" aria-valuemin="0" aria-valuemax="100"><i id="gen-bar" style="width:' + Math.round(S.gen.p * 100) + '%"></i></div>';
+    // last result
     if (r && !S.gen.running) {
+      h += '<section class="card"><header><h2>Last timetable made</h2></header>';
       var q = quality();
       h += '<div class="metrics">' +
         '<div class="metric"><b style="color:var(--' + (r.clashes ? 'bad' : 'ok') + ')">' + r.clashes + '</b><span>teacher clashes</span></div>' +
@@ -1151,9 +1529,8 @@ if (typeof module !== 'undefined') module.exports = Importer;
         '<div class="metric"><b>' + (r.ms / 1000).toFixed(1) + 's</b><span>time taken</span></div></div>';
       if (r.clashes) h += '<div class="banner bad"><span>' + r.clashes + ' clash' + (r.clashes > 1 ? 'es' : '') + ' could not be removed: ' + esc(r.names) + '. Try again, lower the changeover time, give these teachers fewer lessons or fewer off days.</span></div>';
       else h += '<p class="small" style="color:var(--ok)"><b>No clashes.</b> Every teacher is in one place at a time, including teachers who cross between primary and junior.</p>';
-      h += '<button class="btn" data-action="nav" data-v="view">Open timetable</button>';
+      h += '</section>';
     }
-    h += '</section>';
 
     // data
     h += '<section class="card"><details><summary>Backup and restore</summary><div style="display:flex;flex-direction:column;gap:10px;padding-top:6px">' +
@@ -1255,8 +1632,8 @@ if (typeof module !== 'undefined') module.exports = Importer;
 
   function viewView() {
     if (!S.cells) {
-      return '<section class="hero"><p class="eyebrow">Timetable</p><h1>Nothing to show yet</h1></section>' +
-        '<section class="card"><div class="empty-state"><p class="muted">Generate a timetable first, then browse it by class or by teacher.</p><button class="btn primary" data-action="nav" data-v="gen">Go to Generate</button></div></section>';
+      return '<section class="hero"><p class="eyebrow">Timetable</p><h1>No timetable yet</h1></section>' +
+        '<section class="card cta"><p class="muted">One tap makes the master timetable for all ' + S.data.classes.length + ' classes.</p>' + genButton(checks()) + '</section>';
     }
     var d = S.data, V = TT.validate(d, S.cells), cb = cById(), tm = tById();
     if (!S.selClass || !cb[S.selClass]) S.selClass = d.classes[0].id;
@@ -1265,9 +1642,10 @@ if (typeof module !== 'undefined') module.exports = Importer;
     if (!S.selTeacher || !tm[S.selTeacher]) S.selTeacher = tsorted[0] && tsorted[0].id;
 
     var h = '<section class="hero"><p class="eyebrow">Timetable</p><h1>' + (S.vmode === 'class' ? 'By class' : S.vmode === 'school' ? 'Whole school' : 'By teacher') + '</h1></section>';
-    if (S.stale) h += '<div class="banner warn"><span>Lessons changed since this was generated.</span><button class="btn sm" data-action="nav" data-v="gen">Generate again</button></div>';
+    if (S.stale) h += '<div class="banner warn"><span>Lessons changed since this was generated.</span><button class="btn sm" data-action="gen">Generate again</button></div>';
     var nclash = V.clashes.length + V.offHits.length;
     if (nclash) h += '<div class="banner bad"><span>' + nclash + ' clash' + (nclash > 1 ? 'es' : '') + ' marked with ! in the grid.</span></div>';
+    else if (S.gen.result && !S.stale && !S.gen.running) h += '<div class="banner ok"><span><b>Done.</b> Timetable made in ' + (S.gen.result.ms / 1000).toFixed(1) + ' seconds with no clashes.' + (S.esp.weeks && !S.esp.stale && S.esp.res && S.esp.res.classes ? ' The ESP roster is ready too.' : '') + '</span>' + (S.esp.weeks && !S.esp.stale && S.esp.res && S.esp.res.classes ? '<button class="btn sm" data-action="nav" data-v="esp">Open ESP</button>' : '') + '</div>';
 
     h += '<section class="card"><div class="row"><div class="seg" role="group" aria-label="View by"><button data-action="vmode" data-v="class" aria-pressed="' + (S.vmode === 'class') + '">Classes</button><button data-action="vmode" data-v="teacher" aria-pressed="' + (S.vmode === 'teacher') + '">Teachers</button><button data-action="vmode" data-v="school" aria-pressed="' + (S.vmode === 'school') + '">School</button></div>';
     if (S.vmode === 'class') h += '<button class="btn sm' + (S.edit ? ' primary' : '') + '" data-action="edit" aria-pressed="' + S.edit + '">' + (S.edit ? 'Done swapping' : 'Swap lessons') + '</button>';
@@ -1289,7 +1667,7 @@ if (typeof module !== 'undefined') module.exports = Importer;
       h += classGrid(S.selClass, V);
       // teacher key
       var used = {}; S.cells[S.selClass].forEach(function (r) { r.forEach(function (x) { if (x.t) used[x.s + '|' + x.t] = 1; }); });
-      h += '<details><summary>Who teaches what</summary><div class="list">' + Object.keys(used).map(function (k) { var a = k.split('|'); return '<div class="li"><span>' + esc(a[0]) + '</span><span class="muted">' + esc(tm[a[1]] ? tm[a[1]].name : '') + '</span></div>'; }).join('') + '</div></details>';
+      h += '<details><summary>Who teaches what</summary><div class="list">' + Object.keys(used).map(function (k) { var a = k.split('|'); return '<div class="li"><span>' + esc(a[0]) + '</span><span class="muted">' + esc(tm[a[1]] ? tm[a[1]].name : '') + '</span></div>'; }).join('') + '</div></details>' + espLines('class', S.selClass);
     } else {
       var groups = { J: [], P: [], B: [], '-': [] };
       tsorted.forEach(function (t) { var l = lvAll[t.id]; groups[levelOf(l)].push(t); });
@@ -1303,7 +1681,7 @@ if (typeof module !== 'undefined') module.exports = Importer;
         var l2 = g.lvl;
         h += '<div class="row small muted"><span>' + levelChip(l2) + '</span><span>' + g.total + ' lessons a week</span></div>';
         if (l2 === 'B') h += '<p class="small muted">Start times: <span style="color:var(--junior);font-weight:600">blue</span> for junior (40 min lessons) and <span style="color:var(--primary);font-weight:600">green</span> for primary (35 min lessons).</p>';
-        h += g.html;
+        h += g.html + espLines('teacher', S.selTeacher);
       }
     }
     h += '</section>';
@@ -1341,7 +1719,7 @@ if (typeof module !== 'undefined') module.exports = Importer;
         '<div class="row small"><span>' + n + ' of ' + mx + ' lessons a week' + (lv.J && lv.P ? ' (' + lv.J + ' junior, ' + lv.P + ' primary)' : '') + '</span>' +
         '<span class="stepper" aria-label="Weekly limit"><button data-action="tmax" data-id="' + t.id + '" data-v="-1" aria-label="Lower weekly limit">&minus;</button><output>' + mx + '</output><button data-action="tmax" data-id="' + t.id + '" data-v="1" aria-label="Raise weekly limit">+</button></span></div>' +
         '<div class="bar"><i class="' + (n > mx ? 'over' : '') + '" style="width:' + pct + '%"></i></div>' +
-        '<div class="small muted">Not available on</div><div class="days">' + TT.DAYS.map(function (dn, i) { return '<button data-action="toff" data-id="' + t.id + '" data-d="' + i + '" aria-pressed="' + ((t.off || []).indexOf(i) >= 0) + '">' + dn + '</button>'; }).join('') + '</div>' +
+        '<div class="small muted">Not available on</div><div class="days">' + DAYS6.map(function (dn, i) { return '<button data-action="toff" data-id="' + t.id + '" data-d="' + i + '" aria-pressed="' + ((t.off || []).indexOf(i) >= 0) + '">' + dn + '</button>'; }).join('') + '</div>' +
         '<div class="btnrow"><button class="btn sm danger" data-action="tdel" data-id="' + t.id + '"' + (n > 0 || d.assignments.some(function (a) { return a.teacher === t.id; }) ? ' disabled title="Reassign their lessons first"' : '') + '>Remove</button>' +
         ((n > 0) ? '<span class="small muted" style="align-self:center">Reassign their lessons to remove</span>' : '') + '</div></div>';
     });
@@ -1387,7 +1765,7 @@ if (typeof module !== 'undefined') module.exports = Importer;
   }
 
   /* ---- bells view ---- */
-  function bellsView() {
+  function bellsViewBase() {
     function table(sec, title, cls) {
       var n = 0;
       return '<div><h3 class="' + cls + '" style="color:var(--' + (sec === 'J' ? 'junior' : 'primary') + ')">' + title + '</h3><table>' + TT.SCHEDULE[sec].map(function (x) {
@@ -1402,8 +1780,203 @@ if (typeof module !== 'undefined') module.exports = Importer;
       '<p class="muted small">Primary and junior lessons line up again after each break, at 9:55, 11:30 and 2:00. Primary breaks run slightly longer to use up the 5 minutes its shorter lessons save in each period. The timetable treats a primary lesson and a junior lesson as overlapping when they are less than the changeover time apart, so a teacher who crosses over always has time to move.</p></section>';
   }
 
+  function bellsView() { return bellsViewBase() + espBellsCard(); }
+
+  /* ================= ESP (remedial lessons) ================= */
+  var DAYS6 = TT.DAYS.concat(['Sat']);
+  function tfs(m) { return TT.fmt(m, true); }
+  function ensureEsp() { S.data.esp = ESP.migrate(S.data.esp); }
+  function touchEsp() { S.sample = false; if (S.esp && S.esp.weeks) S.esp.stale = true; save(); }
+  function t24(m) { return (m < 600 ? '0' : '') + Math.floor(m / 60) + ':' + (m % 60 < 10 ? '0' : '') + (m % 60); }
+  function parseT(v) { var m = /^(\d{1,2}):(\d{2})/.exec(v || ''); return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : null; }
+  function gradesText(cfg) {
+    var g = (cfg.grades || []).slice().sort(function (a, b) { return a - b; });
+    if (!g.length) return 'no classes';
+    var run = true; for (var i = 1; i < g.length; i++) if (g[i] !== g[i - 1] + 1) run = false;
+    return g.length === 1 ? 'Grade ' + g[0] : run ? 'Grades ' + g[0] + ' to ' + g[g.length - 1] : 'Grades ' + g.join(', ');
+  }
+  function satText(cfg) { return tfs(cfg.sat[0].s) + ' to ' + tfs(cfg.sat[0].e) + ', ' + tfs(cfg.sat[1].s) + ' to ' + tfs(cfg.sat[1].e) + ' and ' + tfs(cfg.sat[2].s) + ' to ' + tfs(cfg.sat[2].e); }
+  function espSummary(cfg) {
+    return gradesText(cfg).replace(/^./, function (c) { return c.toUpperCase(); }) + '. Weekdays: morning ' + tfs(cfg.morning.s) + ' to ' + tfs(cfg.morning.e) + ' and evening ' + tfs(cfg.evening.s) + ' to ' + tfs(cfg.evening.e) +
+      '. Saturday: ' + satText(cfg) + '.';
+  }
+
+  function espRun(onProgress, done) {
+    ensureEsp();
+    var t0 = performance.now(), sv = new ESP.Solver(S.data, { cells: S.cells, seed: (Date.now() % 100000) + 3 });
+    (function tick() {
+      var end = performance.now() + 30;
+      while (!sv.done && performance.now() < end) sv.runChunk(4000);
+      onProgress(sv.progress());
+      if (!sv.done) { setTimeout(tick, 0); return; }
+      var r = sv.result();
+      S.esp = { weeks: r.weeks, stale: false, res: { classes: r.classes, ms: performance.now() - t0, hard: r.hard, noTeacher: r.noTeacher,
+        w: [0, 1].map(function (w) { return { loads: r.loads[w], satBroken: r.satBroken[w], noTeacher: r.noTeacher }; }) } };
+      done();
+    })();
+  }
+
+  function espSlotLabel(sess) { return DAYS6[sess.d] + ' ' + (sess.kind === 'M' ? 'morning' : sess.kind === 'E' ? 'evening' : 'session ' + sess.kind.charAt(1)); }
+  function weekName(w) { return 'Week ' + (w + 1); }
+
+  function espTable(w) {
+    var cfg = S.data.esp, sl = ESP.slots(cfg), ro = S.esp.weeks[w], tm = tById(), mc = masterClasses(), h;
+    h = '<div class="mtwrap"><table class="mt"><thead><tr><th class="cl" rowspan="3">Class</th>';
+    DAYS6.forEach(function (n, i) { h += '<th colspan="' + (i < 5 ? 2 : 3) + '" class="dh">' + n + '</th>'; });
+    h += '</tr><tr>';
+    sl.forEach(function (x) { h += '<th class="' + (x.k && x.d < 5 ? 'lk' : '') + '">' + (x.d < 5 ? (x.k ? 'Eve' : 'Morn') : 'Sess ' + (x.k + 1)) + '</th>'; });
+    h += '</tr><tr class="tmr">';
+    sl.forEach(function (x) { h += '<th class="' + (x.k && x.d < 5 ? 'lk' : '') + '">' + TT.fmt(x.s) + '</th>'; });
+    h += '</tr></thead><tbody>';
+    [['J', 'Junior school', 'j'], ['P', 'Primary school', 'p']].forEach(function (g) {
+      var list = mc[g[0]].filter(function (c) { return ro[c.id] && ro[c.id].length; });
+      if (!list.length) return;
+      h += '<tr class="sec ' + g[2] + '"><th colspan="14">' + g[1] + '</th></tr>';
+      list.forEach(function (c) {
+        h += '<tr><th class="cl"><button class="cn" data-action="gotoclass" data-cls="' + esc(c.id) + '">' + esc(plainName(c)) + '</button></th>';
+        for (var k = 0; k < 13; k++) {
+          var x = null; ro[c.id].forEach(function (q) { if (q.inst === k) x = q; });
+          var lk = k < 10 && k % 2 ? ' lk' : '';
+          if (!x) { h += '<td class="c free' + lk + '"></td>'; continue; }
+          var dim = S.hl && x.teacher !== S.hl ? ' dim' : '', hit = S.hl && x.teacher === S.hl ? ' hit' : '';
+          h += '<td class="c' + lk + dim + hit + '" style="--h:' + hue(x.subject) + '"><b>' + esc(abbr(x.subject)) + '</b><span>' + esc(shortName(tm[x.teacher])) + '</span></td>';
+        }
+        h += '</tr>';
+      });
+    });
+    return h + '</tbody></table></div>';
+  }
+
+  function espAreas(sec) {
+    var ids = {}, skip = (S.data.esp.skip || []), seen = {}, out = [];
+    S.data.classes.forEach(function (c) { if (c.section === sec) ids[c.id] = 1; });
+    S.data.assignments.forEach(function (a) { if (ids[a.cls] && skip.indexOf(a.subject) < 0 && !seen[a.subject]) { seen[a.subject] = 1; out.push(a.subject); } });
+    return out;
+  }
+  function extraPick(sec, label) {
+    var areas = espAreas(sec); if (!areas.length) return '';
+    var cur = S.data.esp.extra[sec];
+    function sel(i, name) {
+      return '<div class="field"><label for="esp-x-' + sec + i + '">' + name + '</label><select class="inp" id="esp-x-' + sec + i + '">' +
+        areas.map(function (a) { return '<option' + (cur[i] === a ? ' selected' : '') + '>' + esc(a) + '</option>'; }).join('') + '</select></div>';
+    }
+    return '<div style="margin-top:14px"><b>' + label + ': the 2 extra sessions</b><p class="muted small">There are ' + areas.length + ' learning areas, each with one morning and one evening session over the two weeks. That leaves ' + Math.max(0, 20 - 2 * areas.length) + ' of the 20 weekday sessions. Pick the areas teachers agreed on this term.</p>' +
+      '<div class="tgrid">' + sel(0, 'Extra morning session') + sel(1, 'Extra evening session') + '</div></div>';
+  }
+
+  function espView() {
+    ensureEsp();
+    var d = S.data, cfg = d.esp, E = S.esp, run = S.espRun.running || S.gen.running, tm = tById(), W = S.espW ? 1 : 0;
+    var h = '<section class="hero"><p class="eyebrow">Remedial lessons</p><h1>ESP</h1><p class="muted">' + esc(espSummary(cfg)) + '</p></section>';
+    h += '<section class="card cta"><button class="btn primary big" id="esp-btn" data-action="espgen"' + (run ? ' disabled' : '') + '>' + (S.espRun.running ? 'Working…' : E.weeks ? 'Generate new ESP rosters' : 'Generate ESP rosters') + '</button>';
+    if (S.espRun.running) h += '<div class="progress" role="progressbar" aria-label="Generating"><i id="esp-bar" style="width:' + Math.round(S.espRun.p * 100) + '%"></i></div>';
+    h += '<p class="small muted">Makes a Week 1 and a Week 2 roster that take turns all term (Week 1, Week 2, Week 1 and so on). Each class has a morning and an evening session every weekday (20 over the two weeks) and one Saturday session, with the Saturday teachers each taking three classes. The main Generate button makes these at the same time as the lessons.</p></section>';
+    if (E.stale) h += '<div class="banner warn"><span>Teachers, lessons or settings changed since these rosters were made.</span><button class="btn sm" data-action="espgen">Generate again</button></div>';
+
+    if (E.weeks) {
+      var r = (E.res && E.res.w && E.res.w[W]) || {}, ro = E.weeks[W], loads = r.loads || {}, ids = Object.keys(loads), max = 0, total = 0;
+      ids.forEach(function (k) { total += loads[k]; if (loads[k] > max) max = loads[k]; });
+      var V = ESP.validate(d, ro), nclash = V.clashes.length + V.offHits.length;
+      var allClash = 0; E.weeks.forEach(function (x) { var v = ESP.validate(d, x); allClash += v.clashes.length + v.offHits.length; });
+      h += '<section class="card"><div class="days pick" role="group" aria-label="Which week">' +
+        [0, 1].map(function (w) { return '<button data-action="espweek" data-w="' + w + '" aria-pressed="' + (W === w) + '">' + weekName(w) + '</button>'; }).join('') + '</div>' +
+        '<p class="small muted" style="margin-top:8px">Week 1 and Week 2 repeat in turn through the term, so over the two weeks each learning area gets one morning and one evening session, plus the 2 extra sessions agreed each term.</p></section>';
+      if (!E.res || !E.res.classes) {
+        h += '<div class="banner warn"><span>No classes are selected. Choose the grades under Settings.</span></div>';
+      } else {
+        h += allClash ? '<div class="banner bad"><span>' + allClash + ' clash' + (allClash > 1 ? 'es' : '') + ' could not be removed. Generate again.</span></div>'
+          : '<div class="banner ok"><span><b>Done.</b> Both weeks have no teacher in two places at once.</span></div>';
+        var sb = r.satBroken || [];
+        if (sb.length) h += '<div class="banner warn"><span><b>Saturday rule:</b> ' + sb.length + ' class' + (sb.length > 1 ? 'es' : '') + ' (' + sb.slice(0, 5).map(function (c) { return esc(plainName(cById()[c] || { name: c })); }).join(', ') + (sb.length > 5 ? ' and more' : '') +
+          ') could not be matched. A Saturday teacher must teach three of the classes. These were given any teacher who is free, so that teacher has fewer than three Saturday sessions. Add subject teachers who take several classes, or change the grades, then generate again.</span></div>';
+        else h += '<div class="banner ok"><span><b>Saturday:</b> ' + V.satTeachers + ' teachers each take 3 sessions, one in each slot, with 3 different classes.</span></div>';
+        var nt = (E.res.w[0].noTeacher || []);
+        if (nt.length) h += '<div class="banner warn"><span>' + nt.length + ' subject' + (nt.length > 1 ? 's were' : ' was') + ' left out because no teacher is set: ' + nt.slice(0, 4).map(function (x) { return esc((cById()[x.cls] || { name: x.cls }).name) + ' ' + esc(x.subject); }).join(', ') + (nt.length > 4 ? ' and more' : '') + '.</span></div>';
+        h += '<section class="card"><div class="metrics"><div class="metric"><b>' + E.res.classes + '</b><span>classes</span></div><div class="metric"><b>' + total + '</b><span>sessions in ' + weekName(W) + '</span></div><div class="metric"><b>' + ids.length + '</b><span>teachers on duty</span></div><div class="metric"><b>' + max + '</b><span>most sessions for one teacher</span></div></div></section>';
+        var tl = ids.map(function (k) { return tm[k]; }).filter(Boolean).sort(function (a, b) { var x = /^T(\d+)$/.exec(a.id), y = /^T(\d+)$/.exec(b.id); return x && y ? x[1] - y[1] : a.name.localeCompare(b.name); });
+        if (S.hl && !loads[S.hl]) S.hl = '';
+        h += '<section class="card"><header><h2>' + weekName(W) + '</h2></header><div class="field"><label for="hl-teacher">Highlight a teacher</label><select class="inp" id="hl-teacher"><option value="">Nobody</option>' +
+          tl.map(function (t) { return '<option value="' + esc(t.id) + '"' + (S.hl === t.id ? ' selected' : '') + '>' + esc(t.name) + ' (' + loads[t.id] + ')</option>'; }).join('') + '</select></div>' +
+          '<p class="small muted">Each cell shows the subject and the teacher. Heavier lines separate the days. Tap a class name to open its own timetable.</p>' + espTable(W);
+        var by = {};
+        Object.keys(ro).forEach(function (cid) { ro[cid].forEach(function (q) { if (q.teacher) (by[q.teacher] = by[q.teacher] || []).push({ cid: cid, q: q }); }); });
+        h += '<details><summary>Duty for each teacher</summary><div class="list">' + tl.map(function (t) {
+          var arr = by[t.id].slice().sort(function (a, b) { return a.q.inst - b.q.inst; });
+          return '<div class="li"><div><b>' + esc(t.name) + '</b><p class="muted small">' + arr.map(function (x) { return esc(espSlotLabel(x.q)) + ' ' + esc(plainName(cById()[x.cid])) + ' ' + esc(abbr(x.q.subject)); }).join(' &middot; ') + '</p></div><span class="chip">' + arr.length + '</span></div>';
+        }).join('') + '</div></details></section>';
+        h += '<section class="card"><header><h2>Share or print</h2></header><div class="btnrow"><button class="btn" data-action="espcopy">Copy rosters</button>' +
+          (DL ? '<button class="btn" data-action="espsave">Save rosters</button><button class="btn" data-action="espprint">Save for printing</button>' : '') + '</div>' +
+          '<p class="muted small">Both weeks are included, with a Week column in the saved file and one A3 page for each week in the print file. The Timetable tab’s print file includes them too.</p></section>';
+      }
+    }
+
+    // settings
+    function tf(id, label, v) { return '<div class="field"><label for="' + id + '">' + label + '</label><input class="inp" id="' + id + '" type="time" value="' + t24(v) + '"></div>'; }
+    h += '<section class="card"><header><h2>Settings</h2></header><div><div class="small muted" style="margin-bottom:6px">Classes that attend</div><div class="days pick">' +
+      [1, 2, 3, 4, 5, 6, 7, 8, 9].map(function (g) { return '<button data-action="espgrade" data-g="' + g + '" aria-pressed="' + (cfg.grades.indexOf(g) >= 0) + '">' + g + '</button>'; }).join('') + '</div></div>' +
+      '<div class="tgrid">' + tf('esp-t-m-s', 'Morning starts', cfg.morning.s) + tf('esp-t-m-e', 'Morning ends', cfg.morning.e) +
+      tf('esp-t-e-s', 'Evening starts', cfg.evening.s) + tf('esp-t-e-e', 'Evening ends', cfg.evening.e) +
+      [1, 2, 3].map(function (n) { return tf('esp-t-s' + n + '-s', 'Saturday session ' + n + ' starts', cfg.sat[n - 1].s) + tf('esp-t-s' + n + '-e', 'Saturday session ' + n + ' ends', cfg.sat[n - 1].e); }).join('') + '</div>' +
+      extraPick('J', 'Junior school') + extraPick('P', 'Primary school') +
+      '<p class="muted small">On Saturday every teacher on duty takes all three sessions, one in each, each with a different class they teach. The gaps between them are the breaks. Teachers marked off on a day get no ESP that day (Saturday can be marked off in the Teachers tab). A teacher with a heavy lesson day is given fewer sessions that day where possible.</p></section>';
+    return h;
+  }
+
+  function espBellsCard() {
+    ensureEsp(); var cfg = S.data.esp; if (!cfg.grades.length) return '';
+    return '<section class="card"><header><h2>ESP remedial sessions</h2></header><div class="sched"><div><h3>Monday to Friday</h3><table><tr><td>Morning</td><td>' + tfs(cfg.morning.s) + ' to ' + tfs(cfg.morning.e) + '</td></tr><tr><td>Evening</td><td>' + tfs(cfg.evening.s) + ' to ' + tfs(cfg.evening.e) + '</td></tr></table></div>' +
+      '<div><h3>Saturday</h3><table>' + [0, 1, 2].map(function (i) { return '<tr><td>Session ' + (i + 1) + '</td><td>' + tfs(cfg.sat[i].s) + ' to ' + tfs(cfg.sat[i].e) + '</td></tr>' + (i < 2 ? '<tr><td class="muted">Break</td><td class="muted">' + tfs(cfg.sat[i].e) + ' to ' + tfs(cfg.sat[i + 1].s) + '</td></tr>' : ''); }).join('') + '</table></div></div>' +
+      '<p class="muted small">For ' + esc(gradesText(cfg)) + '. Week 1 and Week 2 alternate through the term. Change these in the ESP tab.</p></section>';
+  }
+
+  function espLines(kind, id) {
+    var E = S.esp; if (!E || !E.weeks || !id) return '';
+    var cfg = S.data.esp, sl = ESP.slots(cfg), tm = tById(), cb = cById(), rows = [];
+    E.weeks.forEach(function (ro, w) {
+      if (kind === 'class') {
+        (ro[id] || []).forEach(function (q) { rows.push([w * 100 + q.inst, weekName(w) + ' ' + espSlotLabel(q), tfs(sl[q.inst].s) + ' to ' + tfs(sl[q.inst].e), q.subject, q.teacher ? (tm[q.teacher] || {}).name : '']); });
+      } else {
+        Object.keys(ro).forEach(function (cid) { ro[cid].forEach(function (q) { if (q.teacher === id) rows.push([w * 100 + q.inst, weekName(w) + ' ' + espSlotLabel(q), tfs(sl[q.inst].s) + ' to ' + tfs(sl[q.inst].e), q.subject, (cb[cid] || { name: cid }).name]); }); });
+      }
+    });
+    if (!rows.length) return '';
+    rows.sort(function (a, b) { return a[0] - b[0]; });
+    return '<details><summary>ESP remedial sessions (' + rows.length + ' over two weeks)</summary><div class="list">' + rows.map(function (r) {
+      return '<div class="li"><div><b>' + esc(r[1]) + '</b><p class="muted small">' + esc(r[2]) + '</p></div><span class="small" style="text-align:right">' + esc(r[3]) + '<br><span class="muted">' + esc(r[4]) + '</span></span></div>';
+    }).join('') + '</div></details>';
+  }
+
+  function espPrintPage(w) {
+    var cfg = S.data.esp, sl = ESP.slots(cfg), ro = S.esp.weeks[w], tm = tById(), mc = masterClasses(), used = {};
+    var h = '<section class="pg"><h1>' + esc(S.data.school) + ' – ESP remedial lessons – ' + weekName(w) + '</h1><p class="sub">' + esc(espSummary(cfg)) + ' Week 1 and Week 2 take turns all term. Each class has a morning and an evening session every weekday and one on Saturday.</p><table><thead><tr><th class="cl" rowspan="3">Class</th>';
+    DAYS6.forEach(function (n, i) { h += '<th colspan="' + (i < 5 ? 2 : 3) + '" class="lk">' + n + '</th>'; });
+    h += '</tr><tr>';
+    sl.forEach(function (x) { h += '<th class="' + (x.k && x.d < 5 ? 'lk' : '') + '">' + (x.d < 5 ? (x.k ? 'Evening' : 'Morning') : 'Session ' + (x.k + 1)) + '</th>'; });
+    h += '</tr><tr class="tmr">';
+    sl.forEach(function (x) { h += '<th class="' + (x.k && x.d < 5 ? 'lk' : '') + '">' + TT.fmt(x.s) + '–' + TT.fmt(x.e) + '</th>'; });
+    h += '</tr></thead><tbody>';
+    [['J', 'Junior school', 'j'], ['P', 'Primary school', 'p']].forEach(function (g) {
+      var list = mc[g[0]].filter(function (c) { return ro[c.id] && ro[c.id].length; });
+      if (!list.length) return;
+      h += '<tr class="sec ' + g[2] + '"><th colspan="14">' + g[1] + '</th></tr>';
+      list.forEach(function (c) {
+        h += '<tr><th class="cl">' + esc(plainName(c)) + '</th>';
+        for (var k = 0; k < 13; k++) {
+          var x = null; ro[c.id].forEach(function (q) { if (q.inst === k) x = q; });
+          var lk = k < 10 && k % 2 ? ' lk' : '';
+          if (!x) { h += '<td class="c' + lk + '"></td>'; continue; }
+          used[x.subject] = 1;
+          h += '<td class="c' + lk + '" style="background:hsl(' + hue(x.subject) + ' 62% 91%)"><b>' + esc(abbr(x.subject)) + '</b><span>' + esc(shortName(tm[x.teacher])) + '</span></td>';
+        }
+        h += '</tr>';
+      });
+    });
+    return h + '</tbody></table><div class="key"><b>Subjects:</b> ' + Object.keys(used).sort().map(function (n) { return '<b>' + esc(abbr(n)) + '</b> ' + esc(n); }).join(' &nbsp;&middot;&nbsp; ') + '</div></section>';
+  }
+  function espPrintSection() { return espPrintPage(0) + espPrintPage(1); }
+
   /* ---------- render ---------- */
-  var VIEWS = [['gen', 'Generate'], ['view', 'Timetable'], ['teachers', 'Teachers'], ['lessons', 'Lessons'], ['bells', 'Bells']];
+  var VIEWS = [['gen', 'Generate'], ['view', 'Timetable'], ['esp', 'ESP'], ['teachers', 'Teachers'], ['lessons', 'Lessons'], ['bells', 'Bells']];
   var FULLDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
   function masterClasses() {
     function ord(list) {
@@ -1450,7 +2023,8 @@ if (typeof module !== 'undefined') module.exports = Importer;
     var tlist = d.teachers.filter(function (t) { return lv[t.id] && (lv[t.id].J + lv[t.id].P) > 0; });
     tlist.sort(function (a, b) { var x = /^T(\d+)$/.exec(a.id), y = /^T(\d+)$/.exec(b.id); return x && y ? x[1] - y[1] : a.name.localeCompare(b.name); });
     if (S.hl && !tm[S.hl]) S.hl = '';
-    var h = '<div class="seg days" role="group" aria-label="Day">' + TT.DAYS.map(function (n, i) { return '<button data-action="mday" data-v="' + i + '" aria-pressed="' + (S.mDay === String(i)) + '">' + n + '</button>'; }).join('') +
+    var h = S.gen.running ? genButton(checks()) : '<div class="row"><span class="small muted">' + d.classes.length + ' classes, ' + d.teachers.length + ' teachers</span><button class="btn sm" id="gen-btn" data-action="gen">Generate again</button></div>';
+    h += '<div class="seg days" role="group" aria-label="Day">' + TT.DAYS.map(function (n, i) { return '<button data-action="mday" data-v="' + i + '" aria-pressed="' + (S.mDay === String(i)) + '">' + n + '</button>'; }).join('') +
       '<button data-action="mday" data-v="week" aria-pressed="' + (S.mDay === 'week') + '">Week</button></div>';
     h += '<div class="field"><label for="hl-teacher">Highlight a teacher</label><select class="inp" id="hl-teacher"><option value="">Nobody</option>' +
       tlist.map(function (t) { return '<option value="' + esc(t.id) + '"' + (S.hl === t.id ? ' selected' : '') + '>' + esc(t.name) + (t.area ? ' · ' + esc(t.area.slice(0, 26)) : '') + '</option>'; }).join('') + '</select></div>';
@@ -1487,7 +2061,7 @@ if (typeof module !== 'undefined') module.exports = Importer;
     return rows;
   }
 
-  function masterPrintHtml() {
+  function masterPrintHtml(espOnly) {
     var mc = masterClasses(), tm = tById(), NP = 8, used = {};
     function bk(p) { return p === 5 ? ' lk' : (p === 1 || p === 3) ? ' bk' : ''; }
     var css = '@page{size:A3 landscape;margin:9mm}*{box-sizing:border-box}html{-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
@@ -1503,12 +2077,12 @@ if (typeof module !== 'undefined') module.exports = Importer;
       'td.c{height:23px}td.c b{display:block;font-size:11px}td.c span{display:block;font-size:10px;color:#44506a}td.na{background:#eaeef4}' +
       '.bk{border-right:2px solid #5a6579}.lk{border-right:3px solid #14213d}' +
       '.key{font-size:10.5px;margin-top:6px;color:#44506a}@media print{.bar{display:none}body{padding:0}.pg{margin-bottom:0}}';
-    mc.J.concat(mc.P).forEach(function (c) { S.cells[c.id].forEach(function (r) { r.forEach(function (x) { if (x.s) used[x.s] = 1; }); }); });
+    if (S.cells) mc.J.concat(mc.P).forEach(function (c) { S.cells[c.id].forEach(function (r) { r.forEach(function (x) { if (x.s) used[x.s] = 1; }); }); });
     var key = Object.keys(used).sort().map(function (n) { return '<b>' + esc(abbr(n)) + '</b> ' + esc(n); }).join(' &nbsp;&middot;&nbsp; ');
     var named = S.data.teachers.filter(function (t) { return t.name !== t.id && /^T\d+$/.test(t.id); });
     var tkey = named.length ? '<div class="key"><b>Teachers:</b> ' + named.map(function (t) { return esc(t.id) + ' ' + esc(t.name); }).join(' &nbsp;&middot;&nbsp; ') + '</div>' : '';
     var body = '<div class="bar">This is the master timetable for the whole school, one page for each day. To print: press Ctrl+P, choose A3 landscape (or A4 landscape with Fit to page) and print.</div>';
-    for (var d = 0; d < 5; d++) {
+    for (var d = 0; S.cells && !espOnly && d < 5; d++) {
       body += '<section class="pg"><h1>' + esc(S.data.school) + ' – Master timetable</h1><p class="sub">' + FULLDAYS[d] + '. Junior lessons are 40 minutes and primary lessons are 35 minutes. Thick lines mark break and lunch.</p><table><thead><tr><th class="cl">Class</th>';
       for (var p = 0; p < NP; p++) body += '<th class="' + bk(p).trim() + '">' + (p + 1) + '</th>';
       body += '</tr></thead><tbody>';
@@ -1530,6 +2104,7 @@ if (typeof module !== 'undefined') module.exports = Importer;
       });
       body += '</tbody></table><div class="key"><b>Subjects:</b> ' + key + '</div>' + tkey + '</section>';
     }
+    if (S.esp && S.esp.weeks && S.esp.res && S.esp.res.classes) body += espPrintSection();
     return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Master timetable</title><style>' + css + '</style></head><body>' + body + '</body></html>';
   }
 
@@ -1537,7 +2112,7 @@ if (typeof module !== 'undefined') module.exports = Importer;
     var app = $('#app');
     var keep = window.scrollY;
     var mw0 = $('.mtwrap'), msl = mw0 ? mw0.scrollLeft : 0;
-    var h = { gen: genView, view: viewView, teachers: teachersView, lessons: lessonsView, bells: bellsView }[S.view]();
+    var h = { gen: genView, view: viewView, esp: espView, teachers: teachersView, lessons: lessonsView, bells: bellsView }[S.view]();
     app.innerHTML = h;
     var mw1 = $('.mtwrap'); if (mw1 && msl) mw1.scrollLeft = msl;
     $('#tabs').innerHTML = VIEWS.map(function (v) { return '<button data-action="nav" data-v="' + v[0] + '"' + (S.view === v[0] ? ' aria-current="page"' : '') + '>' + v[1] + '</button>'; }).join('');
@@ -1683,7 +2258,7 @@ if (typeof module !== 'undefined') module.exports = Importer;
     function tick() {
       var end = performance.now() + 35;
       while (!solver.done && performance.now() < end) solver.runChunk(4000);
-      S.gen.p = solver.progress();
+      S.gen.p = solver.progress() * 0.75;
       var bar = $('#gen-bar'); if (bar) bar.style.width = Math.round(S.gen.p * 100) + '%';
       if (!solver.done) { setTimeout(tick, 0); return; }
       S.cells = solver.result();
@@ -1691,8 +2266,14 @@ if (typeof module !== 'undefined') module.exports = Importer;
       var V = TT.validate(S.data, S.cells), tm = tById(), names = {};
       V.clashes.forEach(function (c) { names[tm[c.t].name] = 1; });
       V.offHits.forEach(function (c) { names[tm[c.t].name] = 1; });
-      S.gen = { running: false, p: 1, result: { clashes: V.clashes.length + V.offHits.length, names: Object.keys(names).slice(0, 5).join(', '), ms: performance.now() - t0 } };
-      save(); render();
+      var lessonRes = { clashes: V.clashes.length + V.offHits.length, names: Object.keys(names).slice(0, 5).join(', '), ms: 0 };
+      S.gen.p = 0.75;
+      espRun(function (p) { S.gen.p = 0.75 + 0.25 * p; var b = $('#gen-bar'); if (b) b.style.width = Math.round(S.gen.p * 100) + '%'; }, function () {
+        lessonRes.ms = performance.now() - t0;
+        S.gen = { running: false, p: 1, result: lessonRes };
+        S.view = 'view'; S.vmode = 'school'; S.pick = null; S.edit = false;
+        save(); render(); window.scrollTo(0, 0);
+      });
     }
     setTimeout(tick, 20);
   }
@@ -1712,6 +2293,23 @@ if (typeof module !== 'undefined') module.exports = Importer;
     var d = S.data;
     if (a === 'closesheet') { if (ev.target.closest('.sheet > div') && el.classList.contains('sheet')) return; S.sheet = null; S.imp = null; renderOverlay(); return; }
     switch (a) {
+      case 'espgen':
+        if (S.espRun.running || S.gen.running) return;
+        S.espRun = { running: true, p: 0 }; render();
+        espRun(function (p) { S.espRun.p = p; var b = $('#esp-bar'); if (b) b.style.width = Math.round(p * 100) + '%'; }, function () {
+          S.espRun = { running: false, p: 1 }; save(); render(); toast('ESP roster made');
+        });
+        break;
+      case 'espgrade': {
+        var gr = Number(el.getAttribute('data-g')), gl = d.esp.grades, gi = gl.indexOf(gr);
+        if (gi >= 0) gl.splice(gi, 1); else gl.push(gr);
+        gl.sort(function (x, y) { return x - y; }); touchEsp(); render(); break;
+      }
+      case 'espweek': S.espW = Number(el.getAttribute('data-w')) ? 1 : 0; render(); break;
+      case 'espcopy': copyText(tsv(ESP.rows(d, S.esp.weeks, time)), 'Copy the ESP roster'); break;
+      case 'espsave': saveFile('ngurubani-esp-roster.csv', csv(ESP.rows(d, S.esp.weeks, time))); break;
+      case 'espprint': saveFile('ngurubani-esp-roster-print.html', masterPrintHtml(true)); break;
+      case 'open-master': S.view = 'view'; S.vmode = 'school'; S.pick = null; S.edit = false; render(); window.scrollTo(0, 0); break;
       case 'imp-template': outFile('ngurubani-lessons-template.csv', Importer.template(), 'Copy this and paste it into Excel'); break;
       case 'imp-export': outFile('ngurubani-lessons.csv', Importer.toCsv(d), 'Copy this and paste it into Excel'); break;
       case 'imp-paste': S.sheet = { kind: 'paste' }; renderOverlay(); break;
@@ -1720,7 +2318,7 @@ if (typeof module !== 'undefined') module.exports = Importer;
       case 'imp-cancel': S.imp = null; renderOverlay(); break;
       case 'imp-apply': {
         if (!S.imp || !S.imp.parsed.assignments.length) return;
-        S.data = S.imp.nd; S.cells = null; S.stale = false; S.sample = false; S.undo = null; S.pick = null;
+        S.data = S.imp.nd; S.cells = null; S.stale = false; S.sample = false; S.undo = null; S.pick = null; S.esp = { weeks: null, stale: false, res: null }; ensureEsp();
         S.gen = { running: false, p: 0, result: null }; S.selClass = S.data.classes[0].id; S.lClass = S.data.classes[0].id; S.selTeacher = null;
         S.imp = null; S.pasteText = ''; save(); render(); toast('Imported. Now generate the timetable.');
         break;
@@ -1761,10 +2359,10 @@ if (typeof module !== 'undefined') module.exports = Importer;
       case 'gotoclass': S.vmode = 'class'; S.selClass = el.getAttribute('data-cls'); S.pick = null; S.edit = false; render(); window.scrollTo(0, 0); break;
       case 'saveclasses': saveFile('ngurubani-all-classes.csv', csv(allClassRows())); break;
       case 'saveteachers': saveFile('ngurubani-all-teachers.csv', csv(allTeacherRows())); break;
-      case 'backup': saveFile('ngurubani-timetable-backup.json', JSON.stringify({ data: d, cells: S.cells, stale: S.stale, sample: S.sample })); break;
-      case 'backupcopy': copyText(JSON.stringify({ data: d, cells: S.cells, stale: S.stale, sample: S.sample }), 'Backup text'); break;
+      case 'backup': saveFile('ngurubani-timetable-backup.json', JSON.stringify({ data: d, cells: S.cells, stale: S.stale, sample: S.sample, esp: S.esp })); break;
+      case 'backupcopy': copyText(JSON.stringify({ data: d, cells: S.cells, stale: S.stale, sample: S.sample, esp: S.esp }), 'Backup text'); break;
       case 'reset':
-        if (el.getAttribute('data-sure')) { S.data = TT.sampleData(); S.cells = null; S.sample = true; S.stale = false; S.gen = { running: false, p: 0, result: null }; save(); render(); toast('Sample data restored'); }
+        if (el.getAttribute('data-sure')) { S.data = TT.sampleData(); S.cells = null; S.sample = true; S.stale = false; S.esp = { weeks: null, stale: false, res: null }; ensureEsp(); S.gen = { running: false, p: 0, result: null }; save(); render(); toast('Sample data restored'); }
         else { el.setAttribute('data-sure', '1'); el.textContent = 'Tap again to erase your changes'; }
         break;
       case 'tadd': { var nt = { id: uid(), name: 'New teacher', area: '', max: 30, off: [] }; d.teachers.unshift(nt); S.fLevel = 'all'; S.fQ = ''; touch(true); render(); var inp = $('#tn-' + nt.id); if (inp) { inp.focus(); inp.select(); } break; }
@@ -1778,6 +2376,15 @@ if (typeof module !== 'undefined') module.exports = Importer;
   });
   document.addEventListener('change', function (ev) {
     var el = ev.target, d = S.data;
+    if (/^esp-x-[JP][01]$/.test(el.id)) { d.esp.extra[el.id.charAt(6)][Number(el.id.charAt(7))] = el.value; touchEsp(); render(); return; }
+    if (/^esp-t-/.test(el.id)) {
+      var pr = el.id.split('-'), mins = parseT(el.value);
+      if (mins == null) return;
+      var cfg2 = d.esp, so = pr[2] === 'm' ? cfg2.morning : pr[2] === 'e' ? cfg2.evening : cfg2.sat[pr[2] === 's1' ? 0 : pr[2] === 's2' ? 1 : 2];
+      so[pr[3]] = mins; touchEsp(); render();
+      if (so.e <= so.s) toast('The end time should be after the start time');
+      return;
+    }
     if (el.id === 'hl-teacher') { S.hl = el.value; render(); return; }
     if (el.id === 'sel-class') { S.selClass = el.value; S.pick = null; render(); return; }
     if (el.id === 'sel-teacher') { S.selTeacher = el.value; render(); return; }
@@ -1799,7 +2406,7 @@ if (typeof module !== 'undefined') module.exports = Importer;
         try {
           var o = JSON.parse(fr.result);
           if (!o.data || !o.data.classes || !o.data.teachers || !o.data.assignments) throw new Error('bad');
-          S.data = o.data; S.cells = o.cells || null; S.stale = !!o.stale; S.sample = !!o.sample; S.gen = { running: false, p: 0, result: null };
+          S.data = o.data; S.cells = o.cells || null; S.stale = !!o.stale; S.sample = !!o.sample; S.esp = o.esp && o.esp.weeks !== undefined ? o.esp : { weeks: null, stale: false, res: null }; ensureEsp(); S.gen = { running: false, p: 0, result: null };
           save(); render(); toast('Backup restored');
         } catch (e) { toast('That file is not a timetable backup'); }
       };
@@ -1821,7 +2428,7 @@ if (typeof module !== 'undefined') module.exports = Importer;
   /* ---------- boot ---------- */
   load();
   S.selClass = S.data.classes[0].id; S.lClass = S.data.classes[0].id;
-  if (S.cells) S.gen.result = null;
+  if (S.cells) { S.gen.result = null; S.view = 'view'; S.vmode = 'school'; }
   render();
   try {
     if (window.claude && window.claude.use) {
